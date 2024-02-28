@@ -1,0 +1,26 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Feedback and grades
+
+This file will contain feedback to your submission and the points assigned to each exercise.
+
+| Exercise | Grade | Feedback |
+| --- | ---:| --- |
+| A.1 | 6/6 | Try to show your data
+| A.2 | 4/4 |
+| A.3 | 8/11 | Language codes could be written out; consider only putting top languages in legend; larger points would improve the plot, especially seeing the less common languages in a country
+| A.4 | 0/2 | No indication of countries with most/least tweets
+| B.1 | 6/6 |
+| B.2 | 4/5 | Written answer indicates Kosovo and Switzerland has highest fractionalization but your plot indicates Montenegro, Serbia, and B&H first
+| B.3 | 5/5 |
+| B.4 | 7/7 |
+| C.1 | 12/12 | 
+| C.2 | 4/4 |
+| C.3 | 10/11 | Try to explain in more detail what you are doing; nice job with the dummies for decades
+| C.4 | 7/7 |
+| C.5 | 13/20 | Try to suppress messages to avoid needing to scroll past warnings; really interesting selection of indicators to look at infant mortality and your plots were very effective. The only weakness here is in a lack of discussion -- interpreting your findings in the last plots would have made this stronger
+| Total | 86/100 |

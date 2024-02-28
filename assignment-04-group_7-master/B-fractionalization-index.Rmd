@@ -1,0 +1,276 @@
+# Part B. Computing a language fractionalization index
+
+
+Load all packages here:
+
+```{r}
+suppressMessages(library(tidyverse))
+suppressMessages(library(dplyr))
+suppressMessages(library(countrycode))
+```
+
+
+1. Read the `part_a_country_language_distribution.csv` file into R which you created with the counts of tweets per language and country. Use this dataset to compute a tweet-based index of language fractionalization at the country level using the formula in Equation (1) in the paper "Fractionalization" by Alesina et al (2003). Feel free to do this in the way you prefer, either using the tidyverse, or with loops and your own or base-R functions. (6 points)
+
+```{r}
+# load data
+data_CL <- read_csv("part_a_country_language_distribution.csv")
+head(data_CL)
+# calculate index of language fractionalization
+data_frac <- data_CL %>%
+  group_by(country) %>%
+  summarise(country_frac = 1-sum((n_tweets/sum(n_tweets))^2))
+
+# check the first few lines
+head(data_frac)
+  
+```
+
+
+2. Compute some descriptive statistics for this data, either through tables or graphs. Which countries have the highest and lowest levels of tweet language fractionalization in this dataset? (5 points)
+
+```{r}
+
+# Base layer
+P <- ggplot()
+
+# Draw the point plot
+P + geom_col(data = data_frac,
+             width = 0.9,
+             mapping = aes(x = reorder(country, country_frac),
+                           y = country_frac,
+                           # also displayed the value by color
+                           fill = country_frac)) +
+  scale_x_discrete("Country") + 
+  scale_y_continuous("Tweet Language Fractionalization Index",
+                     expand = c(0, 0.02)) +
+  theme_minimal() +
+  ggtitle("Tweet Language Fractionalization Index of Different Country") +
+  theme(axis.text.x = element_text(size = 7.5,
+                                   hjust = 0.9, 
+                                   angle = 45),
+        axis.title.y = element_text(vjust = 3.5,
+                                    family = "Times",
+                                    size = 9,
+                                    face = "bold"),
+        axis.title.x = element_text(family = "Times",
+                                    size = 13,
+                                    vjust = 8,
+                                    face = "bold"),
+        plot.title = element_text(hjust = 1,
+                                  family = "Times",
+                                  face = "bold",
+                                  vjust = 5),
+        aspect.ratio=1/3,
+        legend.position = "none")
+
+# ANSWER: Kosovo and Switzerland has the highest,Jersey has the lowest.
+
+```
+
+
+3. Read the .csv file `fractionalization_alesina_et_al.csv` from the Alesina et al paper into R. Then, merge this data frame with the country-level fractionalization index you computed using Twitter data. This can be a bit painful due to the different spellings of the countries. You can e.g. again use the `countrycode` package to obtain corresponding country codes for the Alesina et al. data, or manually fix some of the country names so that they are the same across datasets. Throughout this process, check the sample size of the initial and final files to make sure you didn't drop any relevant countries. (5 points)
+
+```{r}
+# load data
+data_frac_al <- read_csv("fractionalization_alesina_et_al.csv")
+
+# add ISO-2 country codes with countrycode function for both tables 
+# for data_frac_al
+data_frac_al$country_code <- as.factor(countrycode(data_frac_al$country, origin = "country.name", destination = "iso2c"))
+
+# for data_frac
+data_frac$country_code <- countrycode(data_frac$country, origin = "country.name", destination = "iso2c")
+
+# add “Kosovo” manually
+data_frac$country_code[data_frac$country == "Kosovo"] <- "XK"
+as.factor(data_frac$country_code)
+
+# merge the two tables with the country_code column
+data_merge_tp <- merge(data_frac_al, data_frac,by = "country_code") 
+head(data_merge_tp)
+
+# change country_code into country name
+data_merge_tp$country_name <- countrycode(data_merge_tp$country_code, origin = "iso2c", destination =  "country.name")
+
+# convert data to the target format,rename cols, delete unwanted cols
+data_merge_tp$language <- as.numeric(data_merge_tp$language)
+data_merge <- subset(data_merge_tp, select = -c(country.x,country.y))%>%
+  rename(index_alesina_et_al. = language, 
+         index_tweets = country_frac )
+  
+
+# check the files
+head(data_merge)
+
+```
+
+
+4. Compare your new metric with the measure on language fractionalization from Alesina et al. What is the correlation between the two? For which sets of countries/observations do you find differences and similarities? Can you conjecture why? Do correlations between the two indices increase if you only look at countries with at least certain numbers of recorded tweets in the data? Use any statistical or graphical methods you find helpful to answer this question. (7 points)
+
+
+```{r}
+# create a new table that counts countries and the total number of tweets collected
+data_sum <- data_CL %>%
+  group_by(country_code) %>%
+  summarise(tweets_collected = sum(n_tweets))
+
+# Synthesizes a new table containing the elements needed to draw the plot
+data_merge_n <- merge(data_merge, data_sum, by = "country_code") %>%
+  # ranking the number of tweets captured from least to most,
+  # delete the NA countries
+  filter(country_name != c("Jersey","Isle of Man")) %>%
+  # add a column to calculate the gap between our data and the scientists' data
+  mutate(gap = abs(index_tweets - index_alesina_et_al.)) 
+
+data_merge_fl <- data_merge_n %>%
+  arrange(index_tweets) %>%
+  mutate(number = order(index_tweets))
+
+
+# tidy the data
+data_merge_plot <- pivot_longer(data_merge_fl, 
+                                cols = colnames(data_merge_n)[2:3],
+                                names_to = "data_source", 
+                                values_to = "data")
+# draw the plot
+P1 <- ggplot()
+
+# draw the col-graph to show the values for different countries based on the two tables
+P1 + geom_col(data = data_merge_plot,
+              alpha = 0.85,
+             # sort the country by the index_tweets
+             mapping = aes(x = reorder(country_name, -number),
+                           y = data,
+                           fill = data_source),
+             # draw the cols saperately
+             position = position_dodge())+
+  
+  # fill different colours for different data sources(tables)
+  scale_fill_manual(values = c("#ff9966", "#33cccc"),
+                     labels = c("Alsina's Index", "Tweet's Index")) +
+  
+  # draw a line—graph to show the change in their gap
+  geom_line(data = data_merge_plot,
+            # sort the country by the index_tweets
+            mapping = aes(x = reorder(country_name, -number),
+                          y = gap,
+                          group = 1),
+            colour = "#E9967A",
+            size = 0.5) +
+  
+  # label, theme, background and other settings
+  scale_x_discrete("Country") + 
+  scale_y_continuous("Language Fractionalization Index", expand = c(0, 0.02)) +
+  ggtitle("Picture1: Language Fractionalization Index of Different Country",
+          subtitle = "Alsina's Index VS Tweet's Index") +
+  theme_minimal() +
+  
+  # setting graph elements
+  theme(axis.text.x = element_text(size = 7.5, 
+                                   hjust = 0.9, 
+                                   angle = 45),
+        axis.title.y = element_text(vjust = 3.5,
+                                    family = "Times",
+                                    size = 8.5,
+                                    face = "bold"),
+        axis.title.x = element_text(family = "Times",
+                                    size = 12,
+                                    vjust = 8,
+                                    hjust = 0.46,
+                                    face = "bold"),
+        plot.title = element_text(hjust = 1,
+                                  family = "Times",
+                                  face = "bold",
+                                  vjust = -1),
+        plot.subtitle = element_text(size = 8,
+                                     hjust = 1,
+                                     vjust = -2),
+        aspect.ratio=1/4,
+        legend.title = element_blank(),
+        legend.position = "top") 
+
+# Answer1: From Picture1 we can see that for the most situation, our new metric (Tweet's Index) is higher than language fractionalization from Alesina et al.
+
+# draw the point graph to show the relationship between index and number of tweets scraped
+P2 <- ggplot(data = data_merge_plot,
+                alpha = 0.85,
+                # sort the country by the collection of numbers
+                mapping = aes(x = tweets_collected,
+                              y = data,
+                              colour = data_source))
+
+P2 + geom_point(aes(colour = data_source)) +
+  scale_x_log10("Number of Tweets Scraped") + 
+  scale_y_log10("Language Fractionalization Index") +
+  stat_smooth(method = "loess", formula = 'y ~ x') +
+  theme_linedraw() +
+  scale_colour_manual(values = c("#ff9966", "#33cccc")) +
+  ggtitle("Picture2: Language Fractionalization Index Calculated By Different Number of Samples",
+          subtitle = "Alsina's Index VS Tweet's Index") +
+  
+  # setting graph elements
+  theme(axis.title.y = element_text(vjust = 3.5,
+                                    family = "Times",
+                                    size = 12,
+                                    face = "bold"),
+        axis.title.x = element_text(family = "Times",
+                                    size = 12,
+                                    vjust = -2,
+                                    face = "bold"),
+        plot.title = element_text(size = 11.5,
+                                  hjust = 1,
+                                  family = "Times",
+                                  face = "bold",
+                                  vjust = 2),
+        plot.subtitle = element_text(size = 8,
+                                     hjust = 1,
+                                     vjust = 4),
+        aspect.ratio=1/2,
+        legend.title = element_blank(),
+        legend.position = "bottom") 
+
+# Answer2:From Picture2 we can see that the confidence intervals for the two groups gradually coincide with the increase in the number of tweets collected, although there is some initial instability.Although when the sample size was very small, the two also appeared to overlap. However, we believe this could be due to two reasons: 1. people in this language do not use Twitter themselves for reasons such as national policy, so coincidentally the results are consistent. 2. the numbers just happen to agree on their own.
+
+
+# calculation of correlation between the whole country sample
+cor_all <- cor(data_merge_n$index_tweets,data_merge_n$index_alesina_et_al.)
+
+# correlation between the countries that has more than 10000 recorded tweets
+data_merge_n2 <- data_merge_n %>%
+  filter(tweets_collected > 8000)
+cor_large <- cor(data_merge_n2$index_tweets,data_merge_n2$index_alesina_et_al.)
+
+#compared the answer
+cor_all
+cor_large
+
+# Answer3:This is also proved by Pearson coefficient. When enough sample data (tweets) were collected, our new metric (Tweet's Index) began to align with Alesina et al. Data from the study showed a strong correlation.
+
+
+
+```
+
+In the end, save your merged file under the name `part_b_fractionalization_output.csv`. It should contain the following columns: `country_code`, `country_name`, `tweets_collected`, `language_fractionalization_index_tweets`, `language_fractionalization_index_alesina_et_al.`
+
+```{r}
+# dataframe of 5 cols
+data_full_tp <- full_join(data_frac_al, data_frac,by = "country_code") 
+data_full_tp$language <- as.numeric(data_full_tp$language)
+data_full_fl <- full_join(data_full_tp, data_sum, by = "country_code")
+
+# add some country names manually
+data_full_fl$country.x[data_full_fl$country_code == "GG"] <- "Guernsey"
+data_full_fl$country.x[data_full_fl$country_code == "XK"] <- "Kosovo"
+data_full_fl$country.x[data_full_fl$country_code == "ME"] <- "Montenegro"
+data_full_fl$country.x[data_full_fl$country_code == "RS"] <- "Serbia"
+
+new_csv <- data_full_fl %>%
+  subset(select = -c(country.y))%>%
+    rename(language_fractionalization_index_alesina_et_al. =  language,
+           language_fractionalization_index_tweets = country_frac,
+           country_name = country.x) 
+# save as csv
+write.csv(new_csv,"part_b_fractionalization_output.csv", row.names = FALSE)
+  
+```
