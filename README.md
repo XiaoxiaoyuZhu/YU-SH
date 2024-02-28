@@ -12,9 +12,8 @@ Hello and welcome to my GitHub profile! I'm delighted to have you here. This rep
 
 - **Social Network Analysis Code**: This part of my repository is where I've uploaded code related to Social Network Analysis. It's a fascinating field that I enjoy exploring, and through my code, I aim to provide insights into the complex interconnections within social networks.
 
-I hope these repositories give you a clear understanding of my coding level and my approach to solving problems in the field of data science. I'm always eager to learn and grow, and I welcome any suggestions or collaborations.
+I hope these repositories give you a basic understanding of my coding level, my ability to collect, integrate, and present data, as well as an aspect of my quantitative analysis skills, particularly in Social Network Analysis. Thank you very much for your visit!
 
-Thank you for visiting my GitHub page. I hope you find my work informative and inspiring!
 
 Best regards,
 Xiaoyu
