@@ -1,0 +1,163 @@
+# Part B. Analysis of house price data
+
+Note: A few of the exercises might require to study some functionalities of packages such as `dplyr`. One great source is the book `R for Data Science` by Wickham and Grolemund <https://r4ds.had.co.nz/>.
+
+```{r}
+suppressMessages(library(dplyr))
+suppressMessages(library(zoo))
+suppressMessages(library(tidyverse))
+suppressMessages(library(readr))
+```
+
+The file `rhpi.csv` contains data from the International House Price Database from the Federal Reserve Bank of Dallas. It records the real housing price index. Make sure to use this file `rhpi.csv` contained in the repo for your assignment. If you are interested in the topic beyond this assignment, the raw data is available [here](https://www.dallasfed.org/institute/houseprice/~/media/documents/institute/houseprice/hp1701.xlsx).
+
+Open the `.csv` file into `R` and use `head()` to explore the first few rows of the dataset.
+
+```{r}
+ri_df <- read_csv("rhpi.csv")
+#I know it should be "read.csv",but it will be a "X" before each year ,so I change it into "read_csv"
+head(ri_df)
+```
+
+1.  You may find out that the first column name is empty. You can update the first column name to `country` by using the `colnames()` function.
+
+```{r}
+colnames(ri_df)[1] <- "Country"
+head(ri_df)
+```
+
+2.  Is it in long or wide format? Discuss why or why not it is a `tidy` dataset. If not, reshape the dataset such that it becomes *tidy*.
+
+**ANSWER: Not a tidy format, because it too wide.**
+
+```{r}
+ ri_df_longer <- pivot_longer (ri_df, cols = colnames(ri_df)[2:length(colnames(ri_df))], names_to = "Year", values_to = "Price")
+
+ ri_df_longer <- ri_df_longer %>% 
+   separate(Year,c("Year","Quarter"))
+ 
+ head(ri_df_longer)
+
+```
+
+**For the following exercises use the tidy version of the dataset.**
+
+3.  Only for this part, filter the data frame so that it only contains the data that correspond to the US. Then, produce a line plot that tracks the housing price over time. What do you find?
+
+```{r}
+
+ri_df_longer$date <- paste(ri_df_longer$Year,ri_df_longer$Quarter,sep = "")%>%
+  as.yearqtr()
+
+US_ri_df <- ri_df_longer %>%
+filter(Country=="US")
+# choose up the rows about US
+
+US_ri_df %>% 
+select (date,Price)%>%
+# sth like use the "Year" col and "Price" to create a new df
+plot( ylab= "US Housing Price",col= "Pink",type='l')
+#then draw the plot
+```
+
+**ANSWER: The US housing price got it max around 2008,and the went down around 2012.**
+
+4.  By what percentage did US house prices increase from Q4 2000 to Q4 2006?
+
+```{r}
+
+US_ri_df %>%
+  filter(Year%in% c("2000","2006"), Quarter == "Q4") %>%
+  mutate("increase(%)" = (Price/lag(Price)-1)*100)
+
+```
+**ANSWER: Around 8.14%.**
+
+5.  Write a function that takes a country name as input and returns the average housing price over exactly the last 5 years of the dataset. Then, show that it works by running it for 3 different countries.
+
+```{r}
+
+last_5year_average <- function(X){ 
+  ri_df_longer %>%
+  group_by(Country)%>%
+  slice_tail(n=20)%>% #select the exactly the last 5 years
+    filter(Country==X) %>%  # for inputting different country names
+    summarise(last_5year_average=mean(Price))
+}
+
+last_5year_average("US")
+last_5year_average("Australia")
+last_5year_average("Canada")
+```
+
+6.  If you haven't done so already for the plots, convert the year-quarter format into a date object and order the whole dataset in ascending and descending order based on the date variable. Print the first 10 and the last 10 rows of the sorted dataset.
+
+```{r}
+ri_df_longer$date <- as.Date(ri_df_longer$date)
+
+#asending
+ri_df_longer %>%
+  arrange(ri_df_longer$date)%>%
+  head(n=10)
+
+ri_df_longer %>%
+  arrange(ri_df_longer$date)%>%
+  tail(n=10)
+
+#descending
+ri_df_longer %>%
+  arrange(desc(ri_df_longer$date))%>%
+  head(n=10)
+
+ri_df_longer %>%
+  arrange(desc(ri_df_longer$date))%>%
+  tail(n=10)
+```
+
+7.  Create a new column `ypc` which contains *year to year* percentage changes of the index (e.g. (2004Q3 - 2003Q3)/2003Q3 ). Print out the earliest 10 quarters for France, UK, and the US.
+
+Note: The earliest few percentage change values should be NA for each country, not just the first country.
+
+```{r}
+#sort by country,and then quater
+ypc_ri_df_longer <- ri_df_longer %>%
+  group_by(Country, Quarter) %>%
+  mutate(ypc_percentage = (Price/lag(Price)-1)*100)
+
+#printout the earlist 10 rows of target country
+earliest_country <- function(Y){
+  ypc_ri_df_longer %>%
+  filter(Country==Y)%>%
+  head(10)
+}
+
+earliest_country("France")
+earliest_country("UK")
+earliest_country("US")
+```
+
+8.  For each country, compute the average yearly percentage change over the sample period, i.e. the mean of your new column `ypc` on a by country basis. Then create a final new column called **`demeaned_ypc`** which contains the demeaned yearly percentage change. This means that it contains the `ypc` of each individual country-date observation minus the associated `ypc_mean`, i.e. minus the average `ypc` **of that respective country over the full sample**. Print out the earliest 10 quarters for France, UK, and the US.
+
+```{r}
+
+# get the "ypc_mean" "demeaned_ypc" change over the sample period
+ypc_ri_df_longer_demeaned <- ypc_ri_df_longer %>% 
+  group_by(Country) %>%
+  mutate(ypc_mean = mean(ypc_percentage,na.rm = TRUE)) %>%
+  mutate(demeaned_ypc = ypc_percentage - ypc_mean)
+
+
+#use a function to got the earliest 10 rows of each country in "ypc_ri_df_longer_demeaned" 
+earliest_demeaned <- function(Z){
+  ypc_ri_df_longer_demeaned %>%
+  filter(Country==Z)%>%
+  head(10)
+}
+
+#in put the target countries
+earliest_demeaned("France")
+earliest_demeaned("UK")
+earliest_demeaned("US")
+
+
+```

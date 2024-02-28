@@ -1,0 +1,127 @@
+# Part A. Analysis of data from the Billboard charts
+
+Note: A few of the exercises might require to study some functionalities of packages such as `dplyr`. One great source is the book `R for Data Science` by Wickham and Grolemund <https://r4ds.had.co.nz/>.
+
+```{r}
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
+```
+
+The file `billboard.csv` contains information about every song that appeared in the Billboard Top 100 charts between 1990 and 2000. Each row corresponds to a different song. The variables are:
+
+| Name            | Description                       |     |
+|-----------------|-----------------------------------|-----|
+| `year`          | year in which song first charted  |     |
+| `month`         | month in which song first charted |     |
+| `weeks_charted` | number of weeks song charted      |     |
+| `high`          | peak position                     |     |
+| `artist`        | artist name                       |     |
+| `title`         | song name                         |     |
+| `genre`         | type of music                     |     |
+| `bpm`           | beats per minute (tempo)          |     |
+| `length`        | length of song (in seconds)       |     |
+
+Open the `.csv` file into `R`. Make sure you use the option `stringsAsFactors=F` so that text is not converted into factors.
+
+```{r}
+bd <- read.csv("billboard.csv", stringsAsFactors = F)
+
+head(bd)
+```
+
+1.  How many different songs charted during this period?
+
+```{r}
+diff_songs <- length(unique(bd$title))
+diff_songs
+
+```
+
+2.  What is the median number of weeks that songs during this period stayed in the Billboard Top 100 Chart?
+
+```{r}
+mid_week<-median(bd$weeks_charted)
+mid_week
+```
+
+3.  What is the maximum number of weeks that any song charted during this period? What song was it?
+
+```{r}
+max_week <- max(bd$weeks_charted)
+max_week 
+max_name <- bd$title[which.max(bd$weeks_charted)]
+max_name
+```
+
+4.  How many different songs charted at the peak position (number one)?
+
+```{r}
+No1songs <-length(unique(bd$title[bd$high==1]))
+No1songs
+
+```
+
+5.  What artist had the highest number of songs charting in the list during this period?
+
+```{r}
+#got function to find the mode
+get_max <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+#use the function to find the mode in artist
+mtsart <- get_max(bd$artist)
+mtsart
+
+```
+
+6.  Compute the median tempo of songs released during each month of the year. Plot this data using a line chart. Do you find any seasonal patterns?
+
+```{r}
+#SOLUTION 1 
+bd$bpm = as.integer(bd$bpm)
+songs_tempo_bymonth <- aggregate(bd$bpm,by=list(bd$month),median,na.rm = TRUE)
+songs_tempo_bymonth
+plot(songs_tempo_bymonth, xlab="Month",ylab="Median Tempo of Songs",col= "Pink",type='l')
+
+```
+
+```{r}
+#SOLUTION2
+bd %>%
+  group_by(month) %>%
+  select(month, bpm) %>%
+  drop_na() %>%
+  summarize(songs_tempo_median = median(bpm)) %>%
+  plot(xlab="Month",ylab="Median Tempo of Songs",col= "Pink",type="l")
+
+```
+
+7.  What was the most popular artist for each genre during this period? To answer this question, write a loop that iterates over each different genre. For each genre print into the console:
+
+    1)  The genre, 2) the name of the artist of that genre with the highest number of songs charting in the Billboard list during this period, and 3) the number of songs.
+
+    If there are several artists that share the highest number of Billboard songs in a genre, make sure to print out all their names.
+
+```{r}
+genre_list <- unique(bd$genre)
+for (genre in genre_list){
+  #use the "for"for all the genre 
+  print(c("Genere:", genre))
+  temp_artist <- bd$artist[bd$genre==genre]
+  
+  #to find an print one artist that genre with the highest number of songs
+  temp_artist_freq <- as.data.frame(table(temp_artist),stringsAsFactors=F)
+  max_artist_freq <- max(temp_artist_freq$Freq)
+  print(c("The name of the artists of that genre with the highest number of songs: "))
+  
+  #print other artists that share the highest number of Billboard songs in a genre
+  print(temp_artist_freq$temp_artist[temp_artist_freq$Freq==max_artist_freq])
+  
+  #print the number of songs.
+  print(c("The number of songs: ", length(unique(bd$title[bd$genre==genre]))))
+  print("============================================================")
+  
+}
+```
