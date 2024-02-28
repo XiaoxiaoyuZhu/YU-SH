@@ -1,0 +1,463 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+step0：Create 4 network
+
+```{r}
+require(intergraph)
+require(igraph)
+require(RColorBrewer)
+require(gplots)
+require(ggsci)
+library(RColorBrewer)
+library(dplyr)
+library(ape)
+library(sna)
+library(maps)
+
+#.rs.restartR()
+```
+
+```{r}
+## Read advice.csv
+country <- read.csv("country_metadata.csv", header = TRUE, as.is = TRUE, stringsAsFactors = FALSE)
+goods <- read.csv("exp_goods_2009.csv", header = TRUE, as.is = TRUE, stringsAsFactors = FALSE)
+services <- read.csv("exp_services_2009.csv", header = TRUE, as.is = TRUE, stringsAsFactors = FALSE)
+
+# Creat the igraph object 
+goods_net <- graph_from_edgelist(as.matrix(goods[,c(1,2)]), directed = TRUE)
+services_net <- graph_from_edgelist(as.matrix(services[,c(1,2)]), directed = TRUE)
+
+## Assign "USD" attribute to the edges
+E(goods_net)$USD <- goods$USD
+E(services_net)$USD <- services$USD
+
+goods_top <- igraph::delete.edges(goods_net, which(E(goods_net)$USD < quantile(E(goods_net)$USD, prob = 0.75, na.rm = TRUE)))
+services_top <- igraph::delete.edges(services_net, which(E(services_net)$USD < quantile(E(services_net)$USD, prob = 0.75, na.rm = TRUE)))
+
+
+# add cols
+attify <- function(n_net){
+    igraph::V(n_net)$ISO.alpha3.code <- country$ISO.alpha3.code
+    igraph::V(n_net)$Country <- country$Country
+    igraph::V(n_net)$Continent <- country$Continent
+    igraph::V(n_net)$GDP.per.capita <- country$GDP.per.capita
+    igraph::V(n_net)$Region.1 <- country$Region.1
+    igraph::V(n_net)$Region.2 <- country$Region.2
+    igraph::V(n_net)$Population2010.OECD.estimate <- country$Population2010.OECD.estimate
+    igraph::V(n_net)$Area.sqkm <- country$Area.sqkm
+    igraph::V(n_net)$centroid.lon <- country$centroid.lon
+    igraph::V(n_net)$centroid.lat <- country$centroid.lat
+    igraph::V(n_net)$capital <- country$capital
+    igraph::V(n_net)$capital.lon <- country$capital.lon
+    igraph::V(n_net)$capital.lat <- country$capital.lat
+  return(n_net)
+}
+
+goods_net2 <- attify(goods_net)
+services_net2 <- attify(services_net)
+goods_top2 <- attify(goods_top)
+services_top2 <- attify(services_top)
+
+```
+
+```{r}
+
+# Create a color palette
+
+col4 <- colorRampPalette(brewer.pal(8, 'Set3'))(length(unique(V(goods_net2)$Continent)))
+continent_colors <- setNames(col4, unique(V(goods_net2)$Continent))
+
+# Plotting the network
+p_goods <- plot(goods_net2, 
+                vertex.size = 0.002 * (strength(goods_net2, mode = "in", weights = log2(E(goods_net2)$USD) + 1)), 
+                vertex.color = continent_colors[V(goods_net2)$Continent], 
+                vertex.label = NA,
+                edge.arrow.size = 0.1, 
+                edge.curved = TRUE, 
+                layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+                edge.width = 0.002 * log2(E(goods_net2)$USD),
+                main = "Trade In Goods Between The Countries")
+
+legend(-2.5, 1,
+       legend = names(continent_colors),
+       pch = 19,
+       col = continent_colors,
+       cex = 0.5)
+
+```
+
+
+
+```{r}
+# Polt for all service
+col4 <- colorRampPalette(brewer.pal(8, 'Set3'))(length(unique(V(services_net2)$Continent)))
+continent_colors <- setNames(col4, unique(V(services_net2)$Continent))
+
+p_service <- plot(services_net2, 
+                  vertex.size = 0.002*(strength(services_net2, mode = "in", weights = log2(E(services_net2)$USD))), 
+                  vertex.color = continent_colors[V(services_net2)$Continent],
+                  vertex.label = NA,
+                  # vertex.label.cex = 0.5,
+                  edge.arrow.size = 0.1, 
+                  edge.curved = TRUE, 
+                  layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+                  edge.width = 0.002*log2(E(services_net2)$USD),
+                  main = "Trade In Services Between The Countries")
+
+legend(-2.5, 1,
+       legend = names(continent_colors),
+       pch = 19,
+       col = continent_colors,
+       cex = 0.5)
+
+```
+
+
+
+```{r}
+# Polt for top goods
+col4 <- colorRampPalette(brewer.pal(8, 'Set3'))(length(unique(V(goods_top2)$Continent)))
+continent_colors <- setNames(col4, unique(V(goods_top2)$Continent))
+p_goods_top <- plot(goods_top2, 
+                    vertex.size = 0.004*(strength(goods_top2, mode = "in", weights = log2(E(goods_top2)$USD))),
+                    vertex.color = continent_colors[V(goods_top2)$Continent],
+                    vertex.label = NA,
+                    edge.arrow.size = 0.1, 
+                    edge.curved = TRUE, 
+                    layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+                    edge.width = 0.008*log2(E(goods_top2)$USD),
+                    main = "Goods Trading Relationships In Top 25%")
+
+legend(-2.5, 1,
+       legend = unique(V(goods_top2)$Continent),
+       pch = 19,
+       col = continent_colors,
+       text.width = 1,
+       cex = 0.5)
+
+
+
+```
+
+```{r}
+
+# Create a color palette
+col4 <- colorRampPalette(brewer.pal(8, 'Set3'))(length(unique(V(goods_net2)$Continent)))
+continent_colors <- setNames(col4, unique(V(goods_net2)$Continent))
+
+# Plotting the network
+plot(goods_net2, 
+     vertex.size = 0.002 * (strength(goods_net2, mode = "in", weights = log2(E(goods_net2)$USD) + 1)), 
+     vertex.color = continent_colors[V(goods_net2)$Continent],
+     vertex.label = NA,
+     edge.arrow.size = 0.1, 
+     edge.curved = TRUE, 
+     layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+     edge.width = 0.002 * log2(E(goods_net2)$USD),
+     main = "Trade In Goods Between The Countries"
+)
+
+# Add a legend
+
+legend(-2.5, 1,
+       legend = unique(V(goods_net2)$Continent),
+       pch = 19,
+       col = continent_colors,
+       text.width = 1,
+       cex = 0.5)
+
+
+```
+
+```{r}
+# Polt for top service
+col4 <- colorRampPalette(brewer.pal(8, 'Set3'))(length(unique(V(services_top2)$Continent)))
+continent_colors <- setNames(col4, unique(V(services_top2)$Continent))
+
+
+p_services_top <- plot(services_top2, 
+                    vertex.size = 0.004*(strength(services_top2, mode = "in", weights = log2(E(services_top2)$USD))),
+                    vertex.color = continent_colors[V(goods_net2)$Continent],
+                    vertex.label = NA,
+                    edge.arrow.size = 0.1, 
+                    edge.curved = TRUE, 
+                    layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+                    edge.width = 0.008*log2(E(services_top2)$USD),
+                    main = "Sevice Trading Relationships In Top 25%")
+legend(-2.5, 1,
+       legend = unique(V(services_top2)$Continent),
+       pch = 19,
+       col = continent_colors,
+       text.width = 1,
+       cex = 0.5)
+```
+
+##1.Consider the overall metrics (average path length, transitivity, and reciprocity)  for the top goods and top services networks. Compare these two networks to networks modelled on the originals, created with the Erdős–Rényi model and with the configuration model (i.e., you should create one E-R network and one configuration model network based on the top goods network, and one E-R network and one configuration model network based on the top services network). What do these comparisons tell you about the nature of trade flows between countries? How do the two empirical networks  differ?  In  your  answer,  make  sure  to  define  each  of  the  metrics  and  give  an  intuitive interpretation for them.
+
+```{r}
+
+# Generate an 100 times random sample for goods comparison
+
+goods_ran <- lapply(rep(1, 100), function(x)
+  sample_gnp(n=vcount(goods_top2), p=graph.density(goods_top2), directed = TRUE))
+
+goods_ran_apl <- sapply(goods_ran, average.path.length)
+goods_ran_tra <- sapply(goods_ran, transitivity)
+goods_ran_rec <- sapply(goods_ran, reciprocity)
+
+
+# Create 100 networks using Configuration model 
+
+ind <- igraph::degree(goods_top2, mode='in')
+outd <- igraph::degree(goods_top2, mode='out')
+
+goods_con <- lapply(rep(1, 100), function(x)
+  sample_degseq(out.deg=outd, in.deg=ind, method="simple"))
+
+goods_con_apl <- sapply(goods_con, average.path.length)
+goods_con_tra <- sapply(goods_con, transitivity)
+goods_con_rec <- sapply(goods_con, reciprocity)
+
+goods_table <- data.frame(c('average.path.length', 'transitivity','reciprocity'),
+                       c(average.path.length(goods_top2), transitivity(goods_top2), reciprocity(goods_top2)),
+                       c(mean(goods_ran_apl), mean(goods_ran_tra), mean(goods_ran_rec)),
+                       c(mean(goods_con_apl), mean(goods_con_tra), mean(goods_con_rec)))
+colnames(goods_table) <- c('Name', 'Top Goods','Top Goods Random','Top Goods Constructed')
+goods_table
+
+
+# Generate an 100 times random sample  for service comparison
+services_ran <- lapply(rep(1, 100), function(x)
+  sample_gnp(n=vcount(services_top2), p=graph.density(services_top2), directed = TRUE))
+
+services_ran_apl <- sapply(services_ran, average.path.length)
+services_ran_tra <- sapply(services_ran, transitivity)
+services_ran_rec <- sapply(services_ran, reciprocity)
+
+# Create 100 networks using Configuration model 
+
+ind <- igraph::degree(services_top2, mode='in')
+outd <- igraph::degree(services_top2, mode='out')
+
+services_con <- lapply(rep(1, 100), function(x)
+  sample_degseq(out.deg=outd, in.deg=ind, method="simple"))
+
+services_con_apl <- sapply(services_con, average.path.length)
+services_con_tra <- sapply(services_con, transitivity)
+services_con_rec <- sapply(services_con, reciprocity)
+
+
+services_table <- data.frame(c('average.path.length', 'transitivity','reciprocity'),
+                             c(average.path.length(services_top2), transitivity(services_top2), reciprocity(services_top2)),
+                             c(mean(services_ran_apl), mean(services_ran_tra), mean(services_ran_rec)),
+                             c(mean(services_con_apl), mean(services_con_tra), mean(services_con_rec)))
+
+colnames(services_table) <- c('Name', 'Top Services','Top Services Random','Top Services Configuration')
+services_table
+
+
+# Answer：
+# What do these comparisons tell you about the nature of trade flows between countries? 
+
+# How do the two empirical networks  differ? 
+
+# In  your  answer,  make  sure  to  define  each  of  the  metrics  and  give  an  intuitive interpretation for them.
+
+```
+
+##2.Which do you see as the most influential countries in the trade networks? Identify two potential meanings of "influence," as proxied by different centrality measures. Justify your choice of each centrality measure. In that justification, present clear interpretations of what each centrality measure is capturing about the position of the countries. Calculate both of your chosen centrality measures on the top goods and top services networks and identify the top ten countries that has the highest values for each. There are likely to be many countries repeatedly identified across both, so it may be informative to consider the countries that appear uniquely as having high centrality in one network but not the other. Discuss the patterns you see and what it implies about the top countries and about trade flows, generally. Make explicit reference in your response to the concepts of social capital and brokerage/structural holes covered in the course material. [Note that if you use edge weight for a centrality measure, you need to identify how the calculation interprets those weights (i.e., do higher values mean greater closeness or greater distance?); in those cases where the measure assumes that higher values means greater distance, you should use 1/weight in the calculation.]
+
+```{r}
+
+cents <- function(net){
+  
+   # Store current scipen value
+  old_scipen <- options("scipen")$scipen
+  # Set scipen to a high value to prevent scientific notation
+  options(scipen = 999)
+  
+  bet <- igraph::betweenness(net, directed = FALSE, weight = E(net)$USD) 
+  clo <- igraph::closeness(net, mode = "all", weights = 1/E(net)$weight)
+  all <- data.frame(bet,pr)
+  return(all)
+}
+
+
+# top 10 betweenness and closeness for goods
+
+clo <- igraph::closeness(goods_top2, mode = "all", weights = 1/E(goods_top2)$USD) %>% 
+  as.data.frame() 
+colnames(clo) <-"goods_closeness"
+arrange(clo, desc(goods_closeness)) %>% head(10)
+
+
+bet <- igraph::betweenness(goods_top2, directed = TRUE, weight = E(goods_top2)$USD) %>% 
+  as.data.frame() 
+colnames(bet) <-"goods_betweenness"
+arrange(bet, desc(goods_betweenness)) %>% head(10)
+
+
+
+# top 10 betweenness and closeness for services
+clo <- igraph::closeness(services_top2, mode = "all", weights = 1/E(services_top2)$USD) %>% 
+  as.data.frame() 
+colnames(clo) <-"services_closeness"
+arrange(clo, desc(services_closeness)) %>% head(10)
+
+
+bet <- igraph::betweenness(services_top2, directed = TRUE, weight = E(services_top2)$USD) %>% 
+  as.data.frame() 
+colnames(bet) <-"services_betweenness"
+arrange(bet, desc(services_betweenness)) %>% head(10)
+
+```
+
+#3.How does geography influence trade flows? Calculate assortativity by continent and by GDP on the top goods and top services networks. Use the spinglass community detection algorithm to divide both the goods and services networks into communities (make sure to consider edge weight and use set.seed(123456)  to  ensure  that  we  get  equivalent  results). Plot the goods and services networks with nodes positioned by their latitude/longitude (so that your network should look roughly like a map of the world), and nodes coloured by their community membership. Make sure that your plots are legible and informative, with a legend. Discuss what each of these results implies about trade flows. 
+
+```{r}
+# top goods betweeness
+
+as_gC <- assortativity.nominal(goods_top2, as.factor(V(goods_top2)$Continent), directed = T)
+as_gG <- assortativity(goods_top2, as.factor(V(goods_top2)$GDP.per.capita), directed = T)
+as_sC <- assortativity.nominal(services_top2, as.factor(V(services_top2)$Continent),directed = T)
+as_sG <- assortativity(services_top2, as.factor(V(services_top2)$GDP.per.capita), directed = T)
+
+assortativity_table <- data.frame(c('By Continent','By GDP'),
+                                  c(as_gC,as_gG),
+                                  c(as_sC,as_sG))
+colnames(assortativity_table) <- c('assortativity','Goods','Service')
+assortativity_table
+
+set.seed(123456)
+goods_component <- decompose.graph(goods_top2)[[1]]
+sp_g <- cluster_spinglass(goods_component, weights = E(goods_component)$USD)
+sp_g$csize
+
+split(sp_g$names, sp_g$membership)
+
+plot(goods_component, 
+     vertex.size = 0.004*(strength(goods_component, mode = "in", weights = log2(E(goods_component)$USD))),
+     vertex.color = membership(sp_g),
+     edge.width = 0.005*log(E(goods_component)$USD),
+     edge.curved = TRUE, 
+     vertex.label = NA,
+     edge.arrow.size = 0.1,
+     layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+     main = "Goods Spinglass Communities")
+legend(-2.5,
+       1,
+       legend = c(1:4),
+       pch = 19,
+       cex = 0.5,
+       col = categorical_pal(8)[c(1:4)])
+
+
+
+# For services network
+set.seed(123456)
+services_component <- igraph::decompose.graph(services_top2)[[1]]
+sp_s <- cluster_spinglass(services_component, weights = E(services_component)$USD)
+sp_s$csize
+split(sp_s$names, sp_s$membership)
+
+plot(services_component, 
+     vertex.size = 0.004*(strength(services_component, mode = "in", weights = log2(E(services_component)$USD))),
+     vertex.color = membership(sp_s),
+     edge.width = 0.005*log(E(services_component)$USD),
+     edge.curved = TRUE, 
+     vertex.label = NA,
+     edge.arrow.size = 0.1,
+     layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+     main = "Services Spinglass Communities")
+
+legend(-2.5,
+       1,
+       legend = c(1:3),
+       pch = 19,
+       cex = 0.5,
+       col = categorical_pal(8)[c(1:3)])
+
+
+
+```
+4.Which countries seem to have similar approaches to trading in goods and services? Calculate the structural equivalence (separately) on the top goods and top services networks (using the equiv.clust() function). Plot the dendrograms that result from each. Plot the top goods and top services networks again with nodes positioned as above by their latitude/longitude, and now with nodes coloured by the resulting structural equivalence classes (where you should divide each into four groups). Make sure that your plots are legible and informative, with a legend. Describe and compare the resulting blocks (for this, you will want to look at the dendrogram, at the memberships, and potentially at block models or mixing matrices based on the equivalence classes) and discuss what each of these results imply about global trade relations.
+```{r}
+# Calculate and plot the structural equivalence on top goods
+
+sna_goods_top <-intergraph::asNetwork(goods_top2)
+st_eq_goods <- equiv.clust(sna_goods_top,mode = "digraph")
+plot(st_eq_goods, cex = 0.24, main = "Top Goods Cluster")
+rect.hclust(st_eq_goods$cluster, k = 4)
+
+bm_goods <- blockmodel(sna_goods_top, ec = st_eq_goods, k = 4)
+bm_goods
+
+
+# plot network
+plot(goods_top2, 
+     vertex.size = 0.004*(strength(goods_top2, mode = "in", weights = log2(E(goods_top2)$USD))),
+     vertex.color = bm_goods$block.membership[order(bm_goods$order.vector)],
+     edge.width = 0.005*log(E(goods_top2)$USD),
+     edge.curved = TRUE, 
+     vertex.label = NA,
+     edge.arrow.size = 0.1,
+     layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+     main = "Top Goods Structural Equivalence")
+legend(-2.5,
+       1,
+       legend = c(1:4),
+       pch = 19,
+       cex = 0.5,
+       col = categorical_pal(8)[c(1:4)])
+
+
+
+
+# Calculate and plot the structural equivalence on top services
+sna_services_top <- intergraph::asNetwork(services_top2)
+st_eq_services <- equiv.clust(sna_services_top,mode = "digraph")
+plot(st_eq_services, cex = 0.24, main = "Top Services Cluster")
+rect.hclust(st_eq_services$cluster, k = 4)
+
+bm_services <- blockmodel(sna_services_top, ec = st_eq_services, k = 4)
+
+# for clear membership
+tp_1 <- as.data.frame(bm_services$block.membership[order(bm_services$order.vector)])
+service_memb_list <- cbind(country$Country, tp_1)
+colnames(service_memb_list) <- c("country","cluster")
+arrange(service_memb_list,cluster)
+
+plot(services_top2, 
+     vertex.size = 0.004*(strength(services_top2, mode = "in", weights = log2(E(services_top2)$USD))),
+     vertex.color = bm_services$block.membership[order(bm_services$order.vector)],
+     edge.width = 0.005*log(E(services_top2)$USD),
+     edge.curved = TRUE, 
+     vertex.label = NA,
+     edge.arrow.size = 0.1,
+     layout = as.matrix(cbind(country$centroid.lon, country$centroid.lat)),
+     main = "Top Services Structural Equivalence")
+legend(-2.5,
+       1,
+       legend = c(1:4),
+       pch = 19,
+       cex = 0.5,
+       col = categorical_pal(8)[c(1:4)])
+
+```
+#5
+
+```{r}
+
+last_one<- data.frame(c('log_dist','log_in_gdp','log_out_gdp','log_in_pop','log_out_pop','mutual'),
+           exp(c(-1.2,0.83,1.2,0.82,1.08,1.49)),
+           exp(c(-0.91,1.10,1.34,0.88,0.79,2.12)))
+colnames(last_one) <- c("odds  ratios","goods","service")
+
+last_one
+
+
+```
+
