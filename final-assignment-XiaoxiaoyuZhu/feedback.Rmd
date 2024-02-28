@@ -1,0 +1,21 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Feedback and grades
+
+This file will contain feedback to your submission and the points assigned to each exercise.
+
+| Exercise | Grade | Feedback |
+| --- | --- | --- |
+| 1 | 4/4 |
+| 2 | 7.5/15 | Try to start the discussion before the code by stating the motivation and goals of the analysis in markdown texts. Discussion in answer here just in code cells as comments. Answer mentions yuan instead of pounds. Plots are quite unclear and no group categories are considered. To look at price changes of individual goods and regions, in combination with discussion on markdown, would have yielded additional marks.
+| 3 | 5.5/10 | Good replication broadly, but some easy to fix differences. Remaining differences are e.g. the headline which does not start on the left, no text below plot, font sizes, point labels, font types, dates below plot, logo or arrow.
+| 4 | 6.5/7 | Description column not renamed.
+| 5 | 15/25 | Very interesting idea to look at China topics in 1949. It would have been great to look into the texts in more detail and not just search the headline. Some article texts could have e.g. have been printed out or analysed with further tools such as the text network plots from assignment 5. Nice use of the linking function; it could have been used on more texts or other Wikipedia content related to the events could have been scraped and analysed.
+| 6 | 9/9 |
+| 7 | 15/25 | One API used. Code commented out. Exercise contains very little discussion. Joins only possible based on dates. Dates not formatted in first plot below x-axis. Labels still read "carbon_intensity" instead of "Carbon intensity". In the second plot, if temperature is on the x-axis, it seems not necessary to also add it as colour to points. Interesting finding regarding Carbon emissions and temperature. Third plot still has the wrong title (mentions temperature instead of wind speed). When does the data in the database start? Interesting last plot, but dashed line not in legend. Exercise would ideally have a lot more explanation of database and analysis in markdown, and several plots would need reformatting.
+| Readability and formatting | 2/5 | Discussion only in code comments which makes it more difficult to follow, should be in markdowns. Some plots need reformatting. Otherwise generally well formatted.
+| Total | 59.5/100 | 64.5 before -5 marks because submitted within 24 hours after deadline
