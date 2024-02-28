@@ -1,0 +1,16 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Feedback and grades
+
+This file will contain feedback to your submission and the points assigned to each exercise.
+
+| Exercise | Grade | Feedback |
+| --- | --- | --- |
+| 1 | -/12     |
+| 2 | -/28     |
+| 3 | -/60     |
+| Total | -/100      |

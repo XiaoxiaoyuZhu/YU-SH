@@ -1,0 +1,403 @@
+---
+title: "MY472 - Assignment 3"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+In this assignment, we will use Wikipedia as a training ground to study
+web scraping. There also exists a Wikidata API which can be more
+convenient for certain projects later, however, as the purpose of this
+assignment is to study web scraping, **do not use this or other APIs
+here**. Also please make sure to avoid sending too many requests to the
+website too quickly by adding some short pauses into the code.
+
+When knitting your final markdown file, ensure that the code in
+Exercises 1-3 actually scrapes all information again. In other words, do
+not load data from files in interim steps where it is unclear how these
+files were created. Graders would need to see from the code that it
+scraped all information when it actually ran/was knitted.
+
+```{r}
+suppressMessages(library("tidyverse"))
+suppressMessages(library("rvest"))
+suppressMessages(library("quanteda"))
+suppressMessages(library("quanteda.textplots"))
+suppressMessages(library("dplyr"))
+suppressMessages(library("colorspace"))
+```
+
+## Exercise 1 (12 points)
+
+Scrape the table with the 50 highest grossing films from
+<https://en.wikipedia.org/wiki/List_of_highest-grossing_films>, process
+the data, and store it in a data frame/tibble. Then use `ggplot2` to
+plot the data with the log rank on the x-axis, log world-wide gross on
+the y-axis, and points being annotated by movie titles. In the plot, do
+you see a pattern familiar from the lecture?
+
+```{r}
+# Your code here
+url <- "https://en.wikipedia.org/wiki/List_of_highest-grossing_films"
+
+# Storing the url's HTML code
+html_content <- read_html(url)
+
+# Extracting tables in the document
+film_tab <- html_table(html_content, fill = TRUE)
+
+# Save the dataframe (tibble)
+film_tp_data <- film_tab[[1]]
+film_data <- as_tibble(film_tp_data)
+
+
+# Remove commas and then make variable numeric
+film_data$`Worldwide gross` <-  gsub(",", "", film_data$`Worldwide gross` )
+film_data$`Worldwide gross` <-  as.numeric(gsub("\\$", "", film_data$`Worldwide gross` ))
+
+film_data
+
+# Creating the plot
+ggplot(film_data) +
+  aes(x = log(Rank), y = log(`Worldwide gross`),label = Title) +
+  geom_point() + 
+  scale_x_continuous("log(rank)") + 
+  scale_y_continuous("log(world-wide gross)",labels=scales::comma) +
+  geom_text(hjust=-0.3, size=3)+
+  theme_minimal()
+
+```
+
+## Exercise 2 (28 points)
+
+This exercise discusses three different approaches which are very
+helpful to know when scraping websites. The exemplary website we will
+look at is a simplified version of a recent LSE course list. You can
+find the website under the following link
+<https://lse-my472.github.io/week05/data/lse_courses.html>
+
+In each of Parts 2.1-2.3, using `rvest`, the goal is to scrape all
+course titles and store them in a character vector with one element
+being one course title.
+
+The first elements of such a vector should therefore be:
+
+"AC411 Accounting, Strategy and Control", "AC412 Accountability,
+Organisations and Risk Management", "AC415 Management Accounting for
+Decision Making", "AC416 Topics in Financial Reporting", ...
+
+### 2.1 Approach one: Scraping all elements with one CSS selector
+
+Inspect the website's source code in your browser to see which CSS
+selector would be able to select all course titles in one go. As a hint,
+have a think which HTML tag specifies the desired parts of the website
+and what its corresponding CSS selector is. Inserting this CSS selector
+into `html_elements()` will allow to scrape all course titles with one
+line of code. There is no need to copy the CSS selector with your
+browser or run a loop in this part of the exercise.
+
+Print out the length of the final character vector storing all course
+titles (i.e. to show how many course titles were scraped) and also print
+out the first 20 elements/course titles.
+
+```{r}
+# Your code here
+url <- "https://lse-my472.github.io/week05/data/lse_courses.html"
+
+# Storing the url's HTML code
+html_course <- read_html(url)
+
+# Recall that the CSS selector of a paragraph was "tr"
+course_title <- html_elements(html_course, css = "tr") %>%
+  html_text() %>%
+  str_remove_all("\\n\\n?[A-Z]*\\n") %>%
+  str_subset( "\\S")
+
+# print out the first 20 course titles  
+paste("Total course titles:", length (course_title))
+print("The first 20 titles:")
+course_title[1:20]
+```
+
+### 2.2 Approach two: Loops to scrape element by element
+
+When it is not easily possible to define a unifying CSS selector,
+another approach is copying element-specific CSS selectors with your
+browser, understanding their structure, and then building a loop (you
+can of course also copy the element-specific XPath instead of the CSS
+selector if you attempt the exercise after we have discussed XPaths in
+week 7). One usually copies and looks at selectors for a few elements
+until a pattern emerges that can be used in the loop. I have copied the
+CSS selectors obtained through Firefox of a few course titles in the
+first and second department and added them below.
+
+First department (AC):
+
+`body > div:nth-child(1) > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(2) > td:nth-child(1) > p:nth-child(1)`
+`body > div:nth-child(1) > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(3) > td:nth-child(1) > p:nth-child(1)`
+`body > div:nth-child(1) > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(4) > td:nth-child(1) > p:nth-child(1)`
+`...`
+
+Second department (AN):
+
+`body > div:nth-child(1) > table:nth-child(2) > tbody:nth-child(1) > tr:nth-child(2) > td:nth-child(1) > p:nth-child(1)`
+`body > div:nth-child(1) > table:nth-child(2) > tbody:nth-child(1) > tr:nth-child(3) > td:nth-child(1) > p:nth-child(1)`
+`...`
+
+Create a double for-loop to iterate over all departments and course
+titles. At each iteration of the loop, use the `sprintf` function to
+create the correct CSS selector or XPath as a string. Then use this
+string to scrape the respective course title and add it to a vector that
+stores all course titles.
+
+At the end, print out the length of the final character vector storing
+all course titles (i.e. to show how many course titles were scraped) and
+also print out the first 20 elements/course titles.
+
+Hint 1: Have a look at the following code sample to see how `sprintf`
+can be used to change a string at each iteration of loops. The
+placeholders `%g` are replaced with the values of `a` and `b`.
+
+```{r}
+
+# Scrape the head of the department name
+
+target_text_output <- c()
+
+for (a in 1:length(html_elements(html_course, css = "h3"))) {
+  # Select the html for each department
+  class_string <- sprintf("body > div:nth-child(1) > table:nth-child(%g)", a)
+  # Obtain the numbers of the courses of different departments
+  course_html <- html_elements(html_course, css = class_string)
+  for (b in 2:length(html_elements(course_html, css = "p"))) {
+    some_string <- sprintf("body > div:nth-child(1) > table:nth-child(%g) > tbody:nth-child(1) > tr:nth-child(%g) > td:nth-child(1)", a, b)
+    target_text <- html_elements(html_course,some_string) %>%
+      html_text()
+    # Append the courese title to the vector
+    target_text_output <- append(target_text_output,target_text)
+  }
+}
+
+# print out the first 20 course titles  
+paste("Total course titles:", length (target_text_output))
+print("The first 20 titles:")
+target_text_output[1:20]
+```
+
+Hint 2: One challenge is that each department has varying numbers of
+courses. One way is to choose a high number of iterations for the inner
+loop over course names in a department and to make sure the code keeps
+running even if respective CSS selectors or XPaths were not found for a
+given department-course observation, i.e. if that department offered
+fewer courses. In `rvest`, functions like `html_elements()` conveniently
+do not return an error if no element associated with a CSS selector or
+XPath was found but instead return a list of length zero and thereby
+allow the code to keep running.
+
+```{r}
+# Your code here
+
+target_text_output2 <- c()
+
+# Select the courses, and I tried many numbers, the 150 seems to be the most suitable for courses of different departments
+for (a in 1:length(html_elements(html_course, css = "h3"))) {
+  for (b in 2:150) {
+    some_string2 <- sprintf("body > div:nth-child(1) > table:nth-child(%g) > tbody:nth-child(1) > tr:nth-child(%g) > td:nth-child(1)", a, b)
+    target_text2 <- html_elements(html_course,some_string2) %>%
+      html_text()
+    # break when return a list of length zero
+    if (length(target_text2) == 0){
+      break
+    }
+    target_text_output2 <- append(target_text_output2, target_text2)
+  }
+}
+
+paste("Total course titles:", length (target_text_output2))
+print("The first 20 titles:")
+target_text_output2[1:20]
+```
+
+### 2.3 Approach three: Scrape content directly from the full HTLM text with regular expressions
+
+A third approach can sometimes be to use no selectors at all, but rather
+define a regular expression which captures all relevant information
+directly from the page's full HTML text. The goal here is to define a
+regular expression which captures all course codes and to use this
+expression with the parsed HTML text in R.
+
+Hint: You can just use `str_extract_all()` with the object
+`page_html_text` as input and a suitable regular expression to collect
+all course titles into a character vector (i.e. do not use any further
+`rvest` code here other than the line already added to the code chunk).
+Then print out the length of the final character vector storing all
+course titles (i.e. to show how many course titles were scraped) and
+also print out the first 20 elements/course titles.
+
+```{r}
+page_html_text <- read_html("https://lse-my472.github.io/week05/data/lse_courses.html") %>% html_text()
+# Your code here
+
+course_titles_all <- str_extract_all(page_html_text, "[A-Z]{2}[A-Z|0-9]{3}.+?(?= (\n|[A-Z]{2}))")
+paste("Total course titles:", length(course_titles_all[[1]]))
+print("The first 20 titles:")
+for (i in 1:20){
+  print(course_titles_all[[1]][[i]])
+}
+
+#I learned the "()","?="in a chinese website: https://www.runoob.com/regexp/regexp-syntax.html
+#This is the English one for "()"：https://stackoverflow.com/questions/3789417/whats-the-difference-between-and-in-regular-expression-patterns
+#This is the English one for "?=": https://stackoverflow.com/questions/1570896/what-does-mean-in-a-regular-expression
+```
+
+## Exercise 3 (60 points)
+
+This is an open-ended exercise that allows you to study web scraping
+using the English Wikipedia <https://en.wikipedia.org/> while collecting
+and analysing information that you are particularly interested in. It
+could e.g. be about historical events, politics, science, arts, sports,
+economics, etc.
+
+3.1 Write code which scrapes all information from Wikipedia that you
+would like to analyse and illustrate.
+
+3.2 Clean all data and store it in one or more data
+frames/tibbles/quanteda objects etc.
+
+3.3 Illustrate your findings. This could e.g. be a combination of
+computations with packages such as `dplyr`, text analysis with
+`quanteda`, visualisations with packages such as `ggplot2` or `plotly`
+or others, and/or written answers.
+
+More extensive, carefully thought out, polished, and well understandable
+answers will receive more points. For general assessment criteria, also
+see the course website <https://lse-my472.github.io/>
+
+Hint: Should you decide to use text analysis with `quanteda` as part of
+your project (note: there are many ways to answer this exercise and
+using `quanteda` is not necessary and only one option), a question might
+be how to load most of the text of Wikipedia articles into character
+vectors such that it can then be transformed into a `dfm` for applying
+dictionaries, analysing word shares, etc. One quick approximate approach
+is illustrated below. It combines all paragraphs of a respective
+Wikipedia page (this leaves out e.g. lists but often captures most of
+the textual information).
+
+```{r}
+sample_page <- "https://en.wikipedia.org/wiki/Claude_Shannon"
+
+html_sample_page <- read_html(sample_page)
+
+main_text_content <- html_sample_page %>% html_elements(css = "p") %>% html_text() %>% paste(collapse = " ")
+```
+
+As a side note, Shannon was one of the most important researchers of the
+20th century and his ideas are the foundation of much of the information
+age, but he remains relatively unknown. If you have not heard of his
+research and are interested in learning more, e.g. have a look at this
+[trailer](https://youtu.be/E3OldEtfBrE) or his Wikipedia page.
+
+Lastly, information on the Wikipedia website can be edited at any time.
+If it happens that your chosen article/s is/are subject to regular edits
+that could change the content/structure of the page (and possibly break
+your code) you may want to use the permanent link to a particular
+revision of your article. To get this link for an article, click 'View
+history' (top right), then the top entry for the time & date. This is
+not essential, but will ensure your code is reproducible when being
+graded.
+
+```{r}
+
+# Your code here
+
+##3.1 scrapes all information from Wikipedia used to analyse
+
+#scrab the list of best-selling fiction authors in Wikipedia
+url <- "https://en.wikipedia.org/w/index.php?title=List_of_best-selling_fiction_authors&oldid=1121187063"
+
+# Storing the url's HTML code
+html_content <- read_html(url)
+# Extracting tables in the document
+fiction_tab <- html_table(html_content, fill = TRUE)
+
+
+# Save the dataframe (tibble)
+fiction_tp_data <- fiction_tab[[1]]
+fiction_data <- as_tibble(fiction_tp_data)
+
+##3.2 Clean all data
+# Remove useless things and then make variable numeric
+fiction_data$`Min. estimated sales` <-  gsub("billion", "000", fiction_data$`Min. estimated sales`)
+fiction_data$`Min. estimated sales` <- gsub("million", "", fiction_data$`Min. estimated sales` )
+fiction_data$`Min. estimated sales` <- gsub("\\[[0-9]*\\]", "", fiction_data$`Min. estimated sales` )
+fiction_data$`Min. estimated sales` <- as.numeric(gsub("\\s", "", fiction_data$`Min. estimated sales`))
+
+fiction_data$`Max. estimated sales` <-  gsub("billion", "000", fiction_data$`Max. estimated sales`)
+fiction_data$`Max. estimated sales` <-  gsub("million", "", fiction_data$`Max. estimated sales`)
+fiction_data$`Max. estimated sales` <- gsub("\\[[0-9]*\\]", "", fiction_data$`Max. estimated sales` )
+fiction_data$`Max. estimated sales` <-  as.numeric(gsub("\\s", "", fiction_data$`Max. estimated sales`))
+
+fiction_data$`Number of books` <- gsub("\\[[0-9]*\\]", "", fiction_data$`Number of books` )
+fiction_data$`Number of books` <-  as.numeric(gsub("\\s", "", fiction_data$`Number of books`))
+
+fiction_data$`Genre and/or major works` <- gsub(",.+","", fiction_data$`Genre and/or major works`)
+
+# rename the rows,because the numbers are calculated as million now
+fiction_data_tp <- rename(fiction_data,"Max-estimated_sales(Million)" = `Max. estimated sales`)%>%
+  rename("Min-estimated_sales(Million)" = `Min. estimated sales`) %>%
+  mutate(Mean_estimated_sales = (fiction_data$`Min. estimated sales`+fiction_data$`Max. estimated sales`)/2, na.rm = TRUE)
+
+fiction_data_tp
+
+
+#3.3.1 A wordcloud of different type of fictions
+
+fiction_type <- list(fiction_data_tp[[5]])
+
+dfmfiction <- fiction_type %>%
+    tokens() %>% 
+    dfm()
+
+# try dictionary to show the total number of mystery novels in the macro sense
+fiction_data_dictionary <- dictionary(list(Mystery = c("detective","mystery","crime", "Detectives","Crime thriller")))
+fiction_dictionary <- dfm_lookup(dfmfiction, fiction_data_dictionary,
+                               valuetype = "regex")
+
+#draw the wordcloud of different type of fictions
+textplot_wordcloud(dfmfiction,min.freq = 1)
+
+
+##3.3.2 A plot to show different type of fictions published by different language
+
+
+fiction_data_tp2 <- group_by(fiction_data_tp,`Genre and/or major works`) %>%
+  filter(length(`Genre and/or major works`)>1) %>%
+  filter(`Genre and/or major works` != "Historical")
+
+# Creating the plot
+ggplot(fiction_data_tp2) +
+  aes(x = `Genre and/or major works`, y = Mean_estimated_sales) +
+  geom_col(aes(fill = `Original language`))+
+  scale_fill_discrete_sequential(palette = "YlGnBu")+
+  coord_cartesian(ylim=c(0,1500))+
+  scale_y_continuous("Mean estimatied sales")+
+  ggtitle("Best-selling fictions'authors Style Preference",
+          subtitle ="Published by Different Languages")+
+  theme(plot.title = element_text(hjust = 1,
+                                  family = "Times",
+                                  face = "bold",
+                                  vjust = 1),
+        plot.subtitle = element_text(hjust = 1,
+                                     family = "Times",
+                                     face = "bold",
+                                     vjust = 1.5)) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(size = 8, hjust = 0.9, angle = 45))
+
+  
+
+  
+
+
+```
