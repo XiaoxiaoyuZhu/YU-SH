@@ -1,0 +1,486 @@
+---
+title: "MY472 - Assignment 5"
+output: html_document
+---
+```{r}
+suppressMessages(library(quanteda))
+suppressMessages(library(dplyr))
+suppressMessages(library(readtext))
+suppressMessages(library(DBI))
+suppressMessages(library(compare))
+suppressMessages(library(RSQLite))
+suppressMessages(library(quanteda.textplots))
+```
+
+
+__Exercise 1. (23 points)__
+
+In this exercise, you will build a database containing political tweets from the time of the 2017 UK General Election campaign. The tweet data can be downloaded from this dropbox [link](https://www.dropbox.com/sh/ktl1a3672yl6te0/AAA2At9pSt9hZ-KsaT0Mwbp2a?dl=0). The files contain tweets from candidates and parties, and replies to these accounts.
+
+Note that the files in the dropbox link are compressed. Information on candidates, parties and associated Twitter accounts can be found in "candidate_information.csv" in the repo. This e.g. allows you to find out which tweets and users belong to politicians/parties and which ones are replies from other users, but the file also contains other information.
+
+There are 113 tar.gz files in the dropbox folder containing JSON files with both tweets and user information. All files have to be processed into a relational database (use `DBI` with `SQLite` to create and query this database). There can be several strategies to read the files into R, one is to use the `readtext` function from the `readtext` package which can read compressed files directly (hint: you should also check out the `source` argument in this function which has an option tailored directly to Twitter data).
+
+The goal is to separate the fields in the JSON documents containing tweet and user information into two tables of a relational database. You can name these tables `tweets` and `users`. Before you write the tables into your database, you can process the tweet data with `dplyr` or other packages. Make sure that there are no duplicates among the users and tweets in the final database (i.e. the tweet id is **unique** in the `tweets` table, and the user id is **unique** in `users` table). Also make sure that these two tables can be combined afterwards using a column common to the tables. Please also add one indicator column (i.e. either TRUE/FALSE or 1/0) to each of your tables, in detail:
+
+- A column "screen_name_in" in the `users` table indicating whether an account is among the politician/party accounts
+- A column "in_reply_to_screen_name_in" in the `tweets` table indicating whether a tweet was a reply to a politician/party account
+
+(Hint: You can use the file "candidate_information.csv" to determine which users and tweets are from the politicians/parties and which ones are not)
+
+Make sure that the two final tables in the database contain only one suitable merging column and no unnecessary duplicated information.
+
+1.1 Create a relational `SQLite` database containing the two tables `users` and `tweets`. Once the database has been created, use SQL queries to:
+
+1.2 Print out the total number of rows of each table.
+
+1.3 Print out all column names of each table.
+
+1.4 Print out the first five rows of each table.
+
+1.5 Print out the first five rows of the joined table.
+
+Then disconnect again from your database (in the next exercise we will use a different database).
+
+__Important note:__ Please store the files with tweets and your database outside this repo. We will grade the knitted HTML document and do not require these large files. Furthermore, processing the files will take some time, so it is normal that knitting the final document takes time. Do not load data from interim steps but make sure your code fully creates a database in Exercise 1 from the `ge2017` folder when knitting.
+
+
+```{r}
+# 1.1
+# Create database
+db1 <- dbConnect(RSQLite::SQLite(), "~/downloads/ge2017/assignment05.sqlite")
+candi <- read.csv("candidate_information.csv")
+
+# Reading the all the files into R
+text <- readtext('~/downloads/ge2017.zip',ignore_missing_files=TRUE,text_field = NULL,source = "twitter")
+
+# Extract 15 columns related to tweets, eliminate the same data
+tweets_tp <- text[,c(1:15,18)] %>% 
+  distinct(id_str,.keep_all = TRUE)
+
+# Add one indicator column
+tweets <- as.data.frame(mutate(tweets_tp, in_reply_to_screen_name_in = tweets_tp$in_reply_to_screen_name %in% candi$screenName)) 
+
+# Extract the other columns related to users, eliminate the same data
+users_tp <- text[,c(16:44)] %>% 
+  distinct(user_id_str,.keep_all = TRUE)
+
+# Add one indicator column
+users <- as.data.frame(mutate(users_tp, screen_name_in = users_tp$screen_name %in% candi$screenName))
+
+# use to remove
+#dbRemoveTable(db1, "tweets")
+#dbRemoveTable(db1, "users")
+
+# Write table
+dbWriteTable(db1, "tweets", tweets)
+dbWriteTable(db1, "users", users)
+
+
+# 1.2
+# Return the total number of rows 、
+dbGetQuery(db1, "SELECT COUNT(*) FROM tweets") 
+dbGetQuery(db1, "SELECT COUNT(*) FROM users") 
+
+# 1.3
+# Print out all column names
+dbListFields(db1, "tweets")
+dbListFields(db1, "users")
+
+# 1.4
+# Print out the first five rows
+dbGetQuery(db1, "SELECT * FROM tweets LIMIT 5")
+dbGetQuery(db1, "SELECT * FROM users LIMIT 5")
+
+# 1.5
+# Print out the first five rows of the joined table
+dbGetQuery(db1, "SELECT * 
+           FROM tweets 
+           JOIN users 
+           ON tweets.user_id_str = users.user_id_str
+           LIMIT 5")
+
+# Disconnect
+dbDisconnect(db1)
+```
+
+__Exercise 2. (35 points)__
+
+__Important note:__ In this exercise __do not__ use your previous database. Instead use the database `uk_election_tweets_small.sqlite` which is supplied in the assignment repo! Answer questions 2.1 - 2.9 using __SQL syntax only__ (sending SQL statements through R is fine, no need to change chunk types).
+
+Connect to `uk_election_tweets_small.sqlite`:
+
+```{r}
+db2 <- dbConnect(RSQLite::SQLite(),"uk_election_tweets_small.sqlite")
+```
+
+2.1 How many tweets are in the `tweets` table? How many users in the `users` table? (1 point)
+
+```{r}
+
+# Check the construction of the two tables
+dbGetQuery(db2, "SELECT * FROM tweets LIMIT 5")
+dbGetQuery(db2, "SELECT * FROM users LIMIT 5")
+
+# Count each of them
+dbGetQuery(db2, "SELECT COUNT(*) FROM tweets") 
+dbGetQuery(db2, "SELECT COUNT(*) FROM users") 
+```
+**ANSWER :There are 22130 tweets ib=n the `tweets` table, 5572 users in the `users` table**
+
+
+2.2 How many tweets are replies to politicians/parties? How many accounts are from politicians/parties, how many from other users? (2 points)
+
+```{r}
+
+# Tweets replies to politicians
+dbGetQuery(db2, "SELECT COUNT(*) in_reply_to_screen_name_in 
+           FROM tweets 
+           WHERE in_reply_to_screen_name_in = '1'")
+
+# Accounts from politicians/parties
+dbGetQuery(db2, "SELECT COUNT(*) screen_name_in 
+           FROM users 
+           WHERE screen_name_in = '1'")
+
+# Accounts from other users
+dbGetQuery(db2, "SELECT COUNT(*) screen_name_in 
+           FROM users 
+           WHERE screen_name_in = '0'")
+
+```
+**Answer: 1829 tweets are replies to politicians/parties, 1055 accounts are from politicians/parties, 4517 from other users.**
+
+
+2.3 Which screen_name has posted the highest count of tweets? (5 points)
+
+```{r}
+
+dbGetQuery(db2, 
+  "SELECT screen_name, COUNT(*) AS post_count
+  FROM tweets JOIN users
+    ON users.user_id_str = tweets.user_id_str
+  GROUP BY screen_name
+  ORDER BY post_count DESC
+  LIMIT 1")
+
+```
+**Answer:DrTeckKhong has the highest count of tweets which is 149.**
+
+
+2.4 Who has the highest number of followers? (3 points)
+
+```{r}
+
+dbGetQuery(db2, 
+  "SELECT name,followers_count
+  FROM users
+  ORDER BY followers_count DESC
+  LIMIT 1")
+
+```
+**Answer:"Rufus Hound 🌨"has the highest number of followers,which is 1205426**	
+
+
+2.5 Among politicians, who has the highest number of followers? (3 points)
+
+```{r}
+
+dbGetQuery(db2, 
+  "SELECT name,followers_count
+  FROM users
+  WHERE screen_name_in = '1'
+  ORDER BY followers_count DESC
+  LIMIT 1")
+
+```
+**Answer:"Jeremy Corbyn" has the highest number of followers,which is 968629**
+
+
+
+2.6 Which tweet has the earliest timestamp in the data? Which the latest? (4 points)
+
+```{r}
+
+# Firstly I thought that the col "created_at_dt" seems to be the col record time
+# the earliest timestamp in the data
+dbGetQuery(db2, 
+  "SELECT created_at, id_str, created_at_dt,text
+  FROM tweets
+  ORDER BY created_at_dt
+  LIMIT 1")
+
+# The latest timestamp in the data
+dbGetQuery(db2, 
+  "SELECT created_at, id_str,created_at_dt,text
+  FROM tweets
+  ORDER BY created_at_dt DESC
+  LIMIT 1")
+
+# But I'm mot so sure weather this col exactly the sympol of time, so I check it by another way
+# Find what days are in this data
+dbGetQuery(db2, 
+  "SELECT DISTINCT SUBSTR(created_at, 5, 6) AS month_day_of_tweet
+  FROM tweets
+  ORDER BY month_day_of_tweet")
+
+# There are not many rows, so we could see clearly that the earlist day is May 26, the latest day is Jun 08
+# Find which the earlist and latest on the exactly day
+# Find the latest on the June 08
+dbGetQuery(db2, 
+  "SELECT SUBSTR(created_at, 9, 2) AS day_of_tweet, SUBSTR(created_at, 11, 9) AS time_of_tweet, created_at
+  FROM tweets
+  WHERE day_of_tweet = '08'
+  ORDER BY time_of_tweet DESC
+  limit 1")
+
+# Find the earlist on May26
+dbGetQuery(db2, 
+  "SELECT SUBSTR(created_at, 9, 2) AS day_of_tweet, SUBSTR(created_at, 11, 9) AS time_of_tweet, created_at
+  FROM tweets
+  WHERE day_of_tweet = '26'
+  ORDER BY time_of_tweet
+  limit 1")
+
+# The time is exactly same.
+```
+**Answer: The tweet which id_str is "868157285226491905" has the earliest timestamp, The tweet which id_str is "872728644896141312" the latest.**
+
+
+2.7 Which were the top ten accounts which received most replies and how many replies did their tweets get? (5 points)
+
+```{r}
+
+dbGetQuery(db2, 
+  "SELECT in_reply_to_screen_name, COUNT(*) AS number_reply
+  FROM tweets JOIN users
+    ON users.user_id_str = tweets.user_id_str
+  GROUP BY in_reply_to_user_id_str
+  ORDER BY number_reply DESC
+  LIMIT 1,10") # delet the tweets reply to nobody which was NA
+
+```
+
+2.8 How many tweets contained the word brexit? What proportion of tweets by only politicians contained the word brexit, what proportion of tweets by other users? (7 points)
+
+```{r}
+# Count tweets contained the word brexit
+dbGetQuery(db2, 
+  "SELECT COUNT(*) AS total_brexit_related
+  FROM tweets 
+  WHERE text LIKE '%brexit%'")
+
+# Proportion of tweets by only politicians contained the word brexit
+dbGetQuery(db2, 
+  "SELECT  (100.0 * SUM(CASE WHEN tweets.text LIKE '%brexit%' THEN 1 ELSE 0 END) / COUNT(*)) 
+    AS percent_brexit_politician 
+  FROM tweets JOIN users
+    ON users.user_id_str = tweets.user_id_str
+  WHERE screen_name_in = TRUE")
+
+# Proportion of tweets by other users
+dbGetQuery(db2, 
+  "SELECT  (100.0 * SUM(CASE WHEN tweets.text LIKE '%brexit%' THEN 1 ELSE 0 END) / COUNT(*)) 
+    AS percent_brexit_others 
+  FROM tweets JOIN users
+    ON users.user_id_str = tweets.user_id_str
+  WHERE screen_name_in = FALSE")
+
+```
+
+2.9 How many tweets have geolocation information (lat or lon value)? It is good to keep in mind how small this number is and that it can bias outcomes of studies as these tweets are not representative of all other tweets. (5 points)
+
+```{r}
+
+# Tweets have geolocation information
+dbGetQuery(db2, 
+  "SELECT COUNT(*)
+  FROM tweets JOIN users
+    ON users.user_id_str = tweets.user_id_str
+  WHERE users.place_lat != 'NA'or users.place_lon != 'NA'")
+
+dbDisconnect(db2)
+```
+**ANSWER:769**
+
+
+
+__Exercise 3. (12 points)__
+
+We can analyse Twitter hashtags and account mentions well with quanteda. Read https://quanteda.io/articles/pkgdown/examples/twitter.html and answer the following questions. Obtain the relevant data from the database `uk_election_tweets_small.sqlite` with a SQL query here and answer all questions 3.1 - 3.3 afterwards with `quanteda` rather than SQL.
+
+```{r}
+db3 <- dbConnect(RSQLite::SQLite(),"uk_election_tweets_small.sqlite")
+```
+
+3.1 What are the top 10 popular hashtags? (1.5 points)
+
+```{r}
+# Check which column content the tages
+tweets_3 <- dbGetQuery(db3, "SELECT * FROM tweets")
+
+# Construct a document-feature matrix of texts
+tweet_dfm <- tokens(tweets_3$text, remove_punct = TRUE) %>%
+    dfm()
+
+# Extract 10 most common hashtags
+tag_dfm <- dfm_select(tweet_dfm, pattern = "#*")
+toptag <- names(topfeatures(tag_dfm, 10))
+toptag
+
+```
+
+3.2 Who was mentioned (i.e. ‘@name’) the most in tweets? (1.5 points)
+
+```{r}
+
+mention_dfm <- dfm_select(tweet_dfm, pattern = "@*")
+mention_most <- names(topfeatures(mention_dfm, 1))
+mention_most
+
+```
+**Answer："@jeremycorbyn" was  mentioned the most**
+
+3.3 Choose a small number of hashtags or accounts that could be interesting to analyse (e.g. about one topic or a group of politicians). Visualise how these hashtags or user mentions are related in a network with [textplot_network](https://quanteda.io/reference/textplot_network.html) from `quanteda`. What do you find? (9 points)
+
+```{r}
+
+toks <- tweets_3$text %>%
+    tokens(remove_punct = TRUE) %>%
+    tokens_tolower() %>%
+    tokens_remove(pattern = stopwords("english"), padding = FALSE)
+fcmat <- fcm(toks, context = "window", tri = FALSE)
+fcm_select(fcmat, pattern = "#*") %>%
+  fcm_select(pattern = c("*man","*labo*" ,"*work*","*male*","*demo*"))%>%
+  textplot_network()
+```
+**ANSWER：In this question, I have tried to select some topics related to "man,male", "work", "labour" and "democracy (demo)". ", in an attempt to analyse how hot and relevant these topics are in this election. I found a strong correlation between the #labourdoorstep topic and #votelabour, with all the other topics revolving around these two and interconnecting with each other. There was little discussion of male and female issues.**
+
+
+__Exercise 4. (30 points)__
+
+In this open-ended exercise, the task is to study building an own database from multiple data sources which stores data on a topic you are interested in. You can e.g. download data with your browser (using APIs has no impact on the grade in this exercise) from data sources mentioned in previous assignments such as the [World Bank](https://data.worldbank.org/), [World Health Organization](https://www.who.int/data/gho), [St. Louis Federal Reserve](https://fred.stlouisfed.org/), [Our World in Data](https://ourworldindata.org/), and/or the [World Inequality Database](https://wid.world/data/). After downloading the data, reshape and process it with R packages such as `dplyr`, and then store the final tables in an `SQLite` database. This database should contain at least 2 tables.
+
+More extensive, thought out, polished, and complex databases that combine data from different sources will receive higher marks here. Note, however, that the database should not be unnecessarily complex. For example, it would not make sense to store each economic indicator time-series in a separate table of a database. Rather, data should conceptually be bundled in tables. Also make sure not to repeat any unnecessary duplicate information in different tables of the database (e.g. in a hypothetical university database with a `students` and an `exams` table, both tables contain a `studentid` column but - because the tables can be joined via this column whenever necessary - the `exams` table does not repeat the student email addresses and other student information which is already stored in the `students` table).
+
+If the final database is large, you can simply store it (and load it from) outside of the repository since we will grade the knitted HTML file. Database files can be uploaded to GitHub, however, note that if the database is large, GitHub push/pulls will be slower.
+
+Download and process the data, then store it in the final `SQLite` database. Describe in markdown text why you structured the database the way you did. Then use SQL queries to:
+
+1. Print out the total number of rows for each table in your database. Print out the column names for each table.
+
+2. Print out the first 10 rows for each table. 
+
+3. Show whether all tables in the database can be (directly or indirectly) joined with SQL queries. Print out the first 5 rows of the joined tables.
+
+```{r}
+
+# 4
+# Create database
+db4 <- dbConnect(RSQLite::SQLite(), "~/downloads/assignment05_4/assignment05_4.sqlite")
+
+# Reading the all the files into R
+text04 <- readtext('~/downloads/assignment05_4',ignore_missing_files=TRUE,text_field = NULL)
+
+# Extract columns related to economic conditions
+econ_tp <- text04[c(3:221),c(4:11)] %>%
+  as.data.frame()
+
+# Extract columns related to economic health
+econ_health_tp <- text04[c(227:375),c(5,13)] %>% 
+  as.data.frame()
+
+# Join these two tables related to econ
+econ_all_tp = full_join(econ_tp, econ_health_tp,by = "Country.Code") %>%
+  format(scientific = F) # turn down the scientific notation
+
+# Extract columns related to education condition
+edu_tp <- text04[c(381:622),c(5,14:35)] %>% 
+  distinct(Country.Code,.keep_all = TRUE) %>%
+  as.data.frame() %>%
+  format(scientific = F) 
+
+# Extract columns related to fortune condition
+fortune_tp <- text04[c(628:773),c(5,37:44)] %>% 
+  distinct(Country.Code,.keep_all = TRUE) %>%
+  as.data.frame() %>%
+  format(scientific = F)
+
+# Extract columns related to health condition
+health_tp <- text04[c(779:1044),c(5,46:53)] %>% 
+  distinct(Country.Code,.keep_all = TRUE) %>%
+  as.data.frame() %>%
+  format(scientific = F)
+
+# Write in database
+dbWriteTable(db4, "econ", econ_all_tp)
+dbWriteTable(db4, "edu", edu_tp)
+dbWriteTable(db4, "fortune", fortune_tp)
+dbWriteTable(db4, "health", health_tp)
+
+# use to remove
+#dbRemoveTable(db4, "econ")
+#dbRemoveTable(db4, "edu")
+#dbRemoveTable(db4, "fortune")
+#dbRemoveTable(db4, "health")
+
+# 5.1
+# Print out the total number of rows
+
+dbGetQuery(db4, "SELECT COUNT(*) FROM econ") 
+dbGetQuery(db4, "SELECT COUNT(*) FROM edu") 
+dbGetQuery(db4, "SELECT COUNT(*) FROM fortune") 
+dbGetQuery(db4, "SELECT COUNT(*) FROM health") 
+
+# Print out the column names for each table
+print("column names in econ")
+dbListFields(db4, "econ")
+print("column names in edu")
+dbListFields(db4, "edu")
+print("column names in fortune")
+dbListFields(db4, "fortune") 
+print("column names in health")
+dbListFields(db4, "health") 
+
+# 5.2
+# Print out the first 10 rows for each table
+dbGetQuery(db4, "SELECT * FROM econ LIMIT 10")
+dbGetQuery(db4, "SELECT * FROM edu LIMIT 10")
+dbGetQuery(db4, "SELECT * FROM fortune LIMIT 10")
+dbGetQuery(db4, "SELECT * FROM health LIMIT 10")
+
+# 5.3
+# All the tables can be jioned directly via country code.
+# Print out the first five rows of the joined table (join econ)
+dbGetQuery(db4, "SELECT * 
+           FROM econ
+           JOIN edu
+           ON econ.'Country.Code' = edu.'Country.Code'
+           LIMIT 5")
+
+dbGetQuery(db4, "SELECT * 
+           FROM econ
+           JOIN fortune
+           ON econ.'Country.Code' = fortune.'Country.Code'
+           LIMIT 5")
+
+dbGetQuery(db4, "SELECT * 
+           FROM econ
+           JOIN health
+           ON econ.'Country.Code' = health.'Country.Code'
+           LIMIT 5")
+
+# Print out the first five rows of the joined table (join all)
+dbGetQuery(db4, "SELECT * 
+           FROM econ
+           JOIN edu
+           ON econ.'Country.Code' = edu.'Country.Code'
+           JOIN fortune
+           ON econ.'Country.Code' = fortune.'Country.Code'
+           JOIN health
+           ON econ.'Country.Code' = health.'Country.Code'
+           LIMIT 5")
+
+dbDisconnect(db4)
+```
+**Answer: This question looks for information about the health, education and natural resources and human resources reserves of each country in the world, using 2015 as the base year (as some data are only recorded up to 2015), where the names of the countries are stored within the economic development situation and the rest of the individual tables are linked by country codes. The reason for this is that I believe that all dimensions cannot be analysed without the context of the economy, so the economy will definitely be added to the analysis. The indicator "economic health" is exotic, but I think it is important，so it has to be added manually to the economic situation table.**

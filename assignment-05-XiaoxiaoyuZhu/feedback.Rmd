@@ -1,0 +1,28 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Feedback and grades
+
+This file will contain feedback to your submission and the points assigned to each exercise.
+
+| Exercise | Grade | Feedback |
+| --- | --- | --- |
+| 1 | 23/23    |
+| 2.1 | 1/1    |
+| 2.2 | 2/2     |
+| 2.3 | 5/5    |
+| 2.4 | 3/3     |
+| 2.5 | 3/3    |
+| 2.6 | 4/4     |
+| 2.7 | 5/5    |
+| 2.8 | 7/7     |
+| 2.9 | 5/5    |
+| 3.1 | 1.5/1.5    |
+| 3.2 | 1.5/1.5	  |
+| 3.3 | 5.5/9	|Good plot and short discussion, could have another plot to investigate further with a bit more discussion 
+| 4   | 16/30	|This section needed an introduction at the start rather than end -- data could have undergone more cleaning and pre-processing as the column names are very messy. This could have hard more comments in code and more discussion.  
+
+| Total | 82.5/100 |
