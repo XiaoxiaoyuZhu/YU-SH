@@ -1,0 +1,394 @@
+# Assignment 2
+
+```{r}
+# Load packages here
+library("ggthemes")
+library("dplyr")
+library("tidyverse")
+library("lubridate")
+library("scales")
+library("ggrepel")
+library("showtext")
+library("reshape2")
+library("gridExtra")
+font_add("Times","/System/Library/Fonts/Times.ttc")
+font_add("ArialHB","/System/Library/Fonts/Times.ttc")
+font_families()
+```
+
+## 1. Chaos (19 points)
+
+In this exercise, the goal is to create one of the most famous plots in chaos theory. The equation of the [logistic map](https://en.wikipedia.org/wiki/Logistic_map) is very simple, but its behaviour stunningly complex:
+
+$$
+x_{n+1} = rx_{n}(1-x_{n})
+$$
+
+Starting with an initial value of $x_{0}$ between one and zero, e.g. 0.5, and setting a constant value of r e.g. between zero and four, the equation is iterated forward and thereby computes $x_{1}, x_{2}$, etc. We will only care about visualisation here, but if you are interested in learning more about the background of the equation and plot, e.g. have a look at [this](https://youtu.be/ovJcsL7vyrk) or [this](https://youtu.be/ETrYE4MdoLQ) video.
+
+The goal is to create a plot with different values of r on the x-axis and then x values on the y-axis corresponding to each r value. In parts of the plot, all these x values will be on a single point, but for other r values x moves perpetually.
+
+The following code chunk computes the main dataset of the plot for you. You are welcome to study the code, but this is not part of the assignment and you do not have to worry about how exactly it works (this is not a course about chaos theory after all). Data contained in `logistic_map_data` is already in a tidy format, one variable denotes the value of r, one variable the value of the associated x's. For each value of r repeated over $n=1000$ rows, there are $n$ associated rows of x values (these can be constant or fluctuating, depending on the value of r). Only some information for the colour still has to be added.
+
+```{r}
+# x observations for each r value
+n <- 1000
+# Step between each r value
+r_step <- 0.001
+
+r_range <- seq(2.5, 4, by = r_step)
+to_discard <- 500 # numbers of observations discarded before the n which are stored
+logistic_map_data <- matrix(0, nrow = n*length(r_range), 2)
+for (r in r_range) {
+  
+  current_logistic_map_series <- numeric(n+to_discard)
+  current_logistic_map_series[1] <- 0.5
+  
+  for (k in 1:(n+to_discard-1)) {
+    
+    current_logistic_map_series[k+1] <- r*current_logistic_map_series[k]*(1-current_logistic_map_series[k])
+    
+  }
+  
+  start_index <- 1+n*(match(r, r_range) - 1)
+  end_index <- n*match(r, r_range)
+  
+  logistic_map_data[start_index:end_index,1] <- r
+  logistic_map_data[start_index:end_index,2] <- tail(current_logistic_map_series,n)
+
+}
+
+logistic_map_data <- as_tibble(data.frame(logistic_map_data))
+colnames(logistic_map_data) <- c("r", "x")
+```
+
+Hint: Create your final dataset with `n <- 1000` and `r_step <- 0.001`, however, for these values it takes R some time to compute the plot. When building your plot, adjusting axes, colours, etc., one approach is to first use e.g. `n <- 10` and `r_step <- 0.01` until you have a version of the plot that you are happy with. Just note that the opacity parameter will have to be decreased again once you have increased `n` because now there are more points in the plot.
+
+```{r}
+# Base layer
+P <- ggplot(logistic_map_data, aes(x = r, 
+                                   y = x, 
+                                   colour = cut(r,breaks = c(2.5,3.5,3.6,3.7,3.8,3.9,4.0))))#cut the number according to different colors
+
+# Line plot of the numbers, with different colours
+P + geom_point(size=0.0000000000001,
+               alpha=0.013) + 
+  scale_color_manual("r",
+                     limits = c("(2.5,3.5]","(3.5,3.6]","(3.6,3.7]","(3.7,3.8]","(3.8,3.9]" ,"(3.9,4]"), 
+                     values = c("indianred1", "goldenrod3","limegreen", "darkturquoise","lightslateblue","hotpink")) + theme_classic() + 
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(), # delete most things of Y—axis
+        axis.text.x = element_text(size = 8),  # let the X-axis's text to be the right size
+        axis.line.y = element_line(colour = NA),  # hide the Y-axis 
+        axis.line.x = element_line(size = 0.18), # let the X-axis's line to be the right size
+        axis.ticks.x = element_line(size = 0.2))+ # let the X-axis's ticks to be the right size
+  guides(color = "none") # hide the guides
+
+```
+
+![](plots/chaos.png){width="771"}
+
+## 2. Popularity metrics by party and gender (19 points)
+
+In this exercise, try to replicate the following figure that displays the average popularity metrics of legislators grouped by gender and party. Note that this example first involves some reshaping of the data which you can do with `dplyr` from the `tidyverse`.
+
+```{r}
+# Data for the plot
+fb <- read.csv("data/fb-congress-data.csv", stringsAsFactors=FALSE)
+```
+
+```{r}
+# Your code here
+
+
+# Dropping Independent people
+fb <- fb %>%
+  filter(party != "Independent") 
+
+# Tidy the data
+fb_longer <- pivot_longer (fb, cols = colnames(fb)[5:12], names_to = "species", values_to = "counts")
+
+# Add a col about the mean counts of different party&gender
+fb_longer_a <- fb_longer%>%
+  group_by(party, gender, species)%>%
+  mutate(average_metric = mean(counts,na.rm = TRUE))
+
+# Add another col to combine party and gender
+fb_P <- tidyr::unite(fb_longer_a,"P_G",party,gender,sep="_",remove=FALSE)%>%
+  distinct(average_metric,.keep_all =TRUE)
+
+fb_P$species <- factor(fb_P$species,levels=c("likes_count","comments_count","shares_count","love_count","haha_count","wow_count","angry_count","sad_count"))
+
+# Base layer
+P <- ggplot(fb_P,
+            aes(x = P_G, 
+                     y = average_metric,
+                     fill=as.factor(P_G)))
+
+# Draw the col plot
+P + geom_col(width = 0.8,labels = comma) + 
+  scale_y_continuous("Average of each type of social metric", labels = comma) +
+  scale_x_discrete(name = "Party and gender of Member of Congress",
+                   limits = c("Democrat_F","Democrat_M","Republican_F","Republican_M"),
+                   labels = c("D-F","D-M","R-F","R-M")) +
+  theme_minimal() +
+  scale_fill_manual(values = c("darkblue","blue","darkred","red")) +
+  guides(fill=FALSE) +  # hide the guide
+  theme(aspect.ratio=3/4) + # let the shape become 3:4
+  facet_wrap(~species,
+             scales = "free_y", 
+             nrow=2) +
+# change the position, text and size of titles
+  theme(strip.text.x = element_text(size = 7)) + # change the size of facet title
+  ggtitle("Partisan asymmetries by gender in Facebook popularity metrics",
+          subtitle ="Female Democrats recieve more engagement than Make Democrats. The opposite is true for Republicans") +  # change the text of facet title
+  theme(plot.title = element_text(size = 10),
+        plot.subtitle = element_text(size = 8,
+                                     vjust = 2.5),
+        axis.title.x = element_text(size = 9, 
+                                    vjust = -1),
+        axis.title.y = element_text(size = 9),
+        axis.text.y = element_text(size = 6.5),
+        axis.text.x = element_text(size = 6.5))
+
+#https://www.datanovia.com/en/blog/how-to-change-ggplot-facet-labels/
+       
+```
+
+![](plots/party-gender-FB-metrics.png)
+
+## 3. Ideology of presidential candidates in the US (22 points)
+
+For this exercise, try to replicate the plot below, which Pablo Barbera prepared for a [Washington Post blog post](https://www.washingtonpost.com/news/monkey-cage/wp/2015/06/16/who-is-the-most-conservative-republican-candidate-for-president/?utm_term=.081a276328ad) a few years ago.
+
+The plot combines two sources of data: The ideology estimates for each actor (available in `ideology_1.csv`) and a random sample of ideology estimates for the three density plots (in `ideology_2.csv`).
+
+As a clue, Pablo used `theme_tufte` from the `ggthemes` package as main theme (which he then edited manually). But there may be other ways of replicating it.
+
+```{r}
+# Data for main plot
+ideology <- read.csv("data/ideology_1.csv")
+
+# Data for background plots
+bg <- read.csv("data/ideology_2.csv")
+```
+
+```{r}
+# Your code here
+
+# prepare the data
+bg$type <- factor(bg$type,levels=c("Democrat","Z","Republican"))
+bg_mean <- bg%>%
+  group_by(type)%>%
+  mutate(ideology_mean = mean(ideology))
+
+# this for the order of the @screen_name of geom_pointrange
+ideology_order <- arrange(ideology,desc(twscore))
+ideology_order2 <- ideology_order%>%
+  mutate( number = (order(-twscore))*0.05) 
+
+# draw the picture
+P <- ggplot()
+
+#draw the density line
+P + geom_density(data = bg_mean,
+                 mapping = aes(fill = type,
+                             colour = type,
+                             x = ideology),
+                 alpha = 0.25, # setting the alpha
+                 colour = NA) + # remove the line colour
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1.63)) + # remove the edage 
+  xlim(-2.2,2.2) + 
+  xlab("Position on lantent ideological scale")+
+  theme(axis.title.x = element_text(size = 1.8))+ # limit,name and size of the xlab
+  scale_colour_manual(values = c("blue","black","red"),
+                      aesthetics = c("color","fill")) + 
+# From :https://github.com/rstudio/cheatsheets/blob/main/data-visualization-2.1.pdf
+  
+# draw the middle line of the density curve. I found this in a chinese website first. I'm so sorry but I past another Englist website under it.
+  geom_vline(data = bg_mean, 
+             aes(xintercept = ideology_mean, # the culculate of the geom_vline
+                 color = type),
+             linetype ="solid",
+             alpha = 0.2,
+             size = 0.5) +
+  
+#Chinese:https://zhuanlan.zhihu.com/p/50490855
+#English:https://www.rdocumentation.org/packages/ggplot2/versions/0.9.1/topics/geom_vline
+
+  geom_text(aes(x = c(unique(bg_mean$ideology_mean)),
+                y = c(1.5,0.1,0.1),
+           label = c("Average Republican\n in 114th Congress","Average Democrate \n in 114th Congress","Average Twitter User")),
+           angle = 90, # make it accroding with the vline
+           size = 2.2,
+           hjust = c(1,0,0),
+           vjust = -0.25) +
+  
+# draw the pointrange 
+  geom_pointrange(data = ideology_order2,
+                  aes(x = twscore, 
+                      y = number, 
+                      color = party, 
+                      xmin = twscore - 1.96*twscore.sd, 
+                      xmax = twscore + 1.96*twscore.sd), # the max&min of the point range
+                  size = 0.4,
+                  fatten = 1.5) +
+ #From:https://github.com/rstudio/cheatsheets/blob/main/data-visualization-2.1.pdf
+  
+  #setting text of each screen_name
+  geom_text(data=ideology_order2,
+            aes(twscore, number,
+                label = screen_name, 
+                colour = party,
+                family = "Times"),
+            size = 2.4,
+  #the accurate position of the left&right,to keep the gap equal
+            hjust= ifelse(ideology_order2$twscore >=0,0,1),
+            nudge_x=ifelse(ideology_order2$twscore >=0, 
+                           0.02+1.96*ideology_order2$twscore.sd,
+                           -0.02-1.96*ideology_order2$twscore.sd),
+            
+            show.legend = TRUE,
+            check_overlap = TRUE) +
+    theme_tufte() +
+    theme(axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank()) +
+  guides(color = "none",fill = "none")+
+  ggtitle("Twitter ideology scores of potential Democratic and Republican presidential primary candidates") +
+  
+#setting the title of the plot
+  theme(plot.title = element_text(size = 9,
+                                  hjust = 0.5,
+                                  face = "bold",
+                                  family = "Times" )) 
+#https://rstudio-pubs-static.s3.amazonaws.com/366989_b80cfe1ffa5149f589fb44ea847f5967.html
+#https://stackoverflow.com/questions/35458230/how-to-increase-the-font-size-of-ggtitle-in-ggplot2
+```
+
+![](plots/ideology-plot.png)
+
+## 4. Own visualisation (40 points)
+
+In this exercises you can visualise data about a topic you are interested in.
+
+First download the data. If you are looking for ideas, e.g. have a look at health data from the [World Health Organization](https://www.who.int/data/gho), economic data from the [St. Louis Federal Reserve](https://fred.stlouisfed.org/), or data on wealth and income inequality from the [World Inequality Database](https://wid.world/data/). Once you have downloaded the data, load it into R and process it, and then explore and illustrate it with plots created with `ggplot2` and/or `plotly`. You can also add brief explanations through markdown text.
+
+More extensive, carefully thought out, polished, and well understandable answers will receive more points.
+
+Note: Some of these data can also be obtained via APIs, but you can just manually download files such as .csv. for this assignment. This has no effect on the grade.
+
+```{r}
+# Your code here
+# Data for main plot
+murder_tp <- read.csv("data/murderdata.csv") # From https://www.kaggle.com/
+# It's too big and I have to ZIP it to upload
+
+# select need data
+murder <- select(murder_tp,c("Year","Victim.Sex","Victim.Age","Perpetrator.Sex","Perpetrator.Age","Relationship","Weapon","Victim.Count"))%>%
+  group_by(Year,Perpetrator.Sex)%>%
+#drop obviously useless orwrong data
+  filter("Victim.Count"!=0)%>%
+  filter("Perpetrator.Age">1)%>%
+#add two useful cols
+  mutate(sum_Victim = sum(Victim.Count,na.rm = TRUE))%>%
+  mutate(sum_Perpetrator = length(Perpetrator.Age),na.rm = TRUE)
+
+# Base layer
+p <- ggplot(murder,
+            aes(x = Year, 
+                y = sum_Victim/1000))
+
+# Draw the picture 1, to show how many victims are females and males perpetrator
+P1 <- p + geom_col(aes(fill = Victim.Sex),
+             position="stack", 
+             stat="identity",
+             na.rm = FALSE, 
+             labels = comma,
+             alpha = 0.8,
+             colour = NA) +
+  scale_y_continuous("Victims in Amercian(K)", 
+                     labels = comma,expand = c(0, 0)) +
+  scale_fill_manual(values = c("#ff9966","#33cccc","#00cccc")) +
+  theme_minimal()+
+  theme(axis.title.x = element_text(size = 11, 
+                                    family = "Times",
+                                    vjust = -1,
+                                    face = "bold"),
+        axis.title.y = element_text(size = 10, 
+                                    family = "Times",
+                                    face = "bold",
+                                    vjust = 3))+
+  facet_wrap(~Perpetrator.Sex,
+             scales = "free_y")+
+  ggtitle("1980-2014 U.S. Murder Perpetrator Choose",
+          subtitle ="Victims Murdered & Weapon Choose by Perpetrators of Different Genders")+
+  theme(plot.title = element_text(hjust = 1,
+                                  family = "Times",
+                                  face = "bold",
+                                  vjust = 1),
+        plot.subtitle = element_text(hjust = 1,
+                                     family = "Times",
+                                     face = "bold",
+                                     vjust = 1.5)) +
+  guides(color = "none",fill = "none")
+
+####Draw another picture to show weapon due to different gender and age（adult or minor）
+
+#add one cols to show whether adult
+murder_a <- murder%>%
+  group_by(ifelse(murder$Perpetrator.Age <18,"Minor","Adult"))%>%
+  mutate(agegroup = ifelse(Perpetrator.Age <18,"Minor","Adult"))
+
+#add another col to show the proportion of weapon choose
+### choose proportion because the count numbers are too different
+
+weapon <- murder_a %>%
+  filter(Perpetrator.Sex != "Unknown") %>%
+  group_by(Perpetrator.Sex,Weapon,agegroup) %>%
+  summarise(number=n()) %>%
+  ungroup()%>%
+  group_by(Perpetrator.Sex,agegroup) %>%
+  mutate(total = sum(number),Percent = number/total*100) 
+
+# converse the figures for female to become "-" number,so they can show on a same picture
+weapon$percent <- ifelse(weapon$Perpetrator.Sex=="Female",
+                         -weapon$Percent,weapon$Percent)
+#
+p2 <- ggplot(data=weapon,aes(x=Weapon,y=percent))
+
+P2 <- p2 + geom_bar(aes(fill=Perpetrator.Sex),
+                    alpha = 0.8,
+                    colour=NA,
+                    size=2,
+                    width = 0.9,
+                    stat = "identity")+
+  scale_fill_manual(values = c("#ff9966","#33cccc")) +
+  coord_flip(ylim=c(-20,20))+
+  facet_wrap(~agegroup)+
+  theme_minimal()+
+  scale_x_discrete("Weapon Used", 
+                     expand = c(0, 0))+
+  scale_y_continuous(name = "The Proportion of Weapons Choose by Gender",
+                     labels = c("20%","10%","0","10%","20%")) +
+  theme(axis.title.x = element_text(size = 9, 
+                                    family = "Times",
+                                    vjust = -2,
+                                    face = "bold"),
+        axis.title.y = element_text(size = 9, 
+                                    family = "Times",
+                                    face = "bold"),
+        axis.text.y = element_text(size = 6.5,
+                                   face = "bold",
+                                   family = "Times"),
+        legend.title = element_blank())
+  
+
+#Combine the two pictures
+grid.arrange(arrangeGrob(P1, P2))
+
+
+  
+
+```
